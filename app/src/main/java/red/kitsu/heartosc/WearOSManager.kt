@@ -78,6 +78,10 @@ class WearOSManager(private val context: Context) : MessageClient.OnMessageRecei
 
     fun cleanup() {
         stopListening()
+    }
+
+    fun destroy() {
+        cleanup()
         scope.cancel()
     }
 }

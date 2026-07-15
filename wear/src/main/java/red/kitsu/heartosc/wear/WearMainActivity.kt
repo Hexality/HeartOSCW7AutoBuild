@@ -243,6 +243,11 @@ class WearMainActivity : ComponentActivity(), SensorEventListener {
         }
     }
 
+    override fun onStop() {
+        super.onStop()
+        stopHeartRateMonitoring()
+    }
+
     override fun onDestroy() {
         super.onDestroy()
         stopHeartRateMonitoring()

@@ -13,6 +13,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -22,6 +23,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bluetooth
+import androidx.compose.material.icons.filled.Watch
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material3.*
@@ -47,7 +49,9 @@ fun OnboardingScreen(
     isBluetoothEnabled: Boolean
 ) {
     val context = LocalContext.current
-    val pagerState = rememberPagerState(pageCount = { 5 })
+    var selectedInputSource by remember { mutableStateOf(SettingsManager.VAL_INPUT_SOURCE_BLE) }
+    val pageCount = if (selectedInputSource == SettingsManager.VAL_INPUT_SOURCE_WEAR_OS) 5 else 6
+    val pagerState = rememberPagerState(pageCount = { pageCount })
     val scope = rememberCoroutineScope()
 
     // Helper function to check if Bluetooth is enabled
@@ -155,54 +159,90 @@ fun OnboardingScreen(
                 modifier = Modifier.weight(1f),
                 userScrollEnabled = false
             ) { page ->
-                when (page) {
-                    0 -> WelcomePage()
-                    1 -> BluetoothPermissionPage(
-                        isGranted = bluetoothPermissionsGranted,
-                        isBluetoothEnabled = bluetoothEnabledState,
-                        onRequestPermission = {
-                            val permissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                                arrayOf(
-                                    Manifest.permission.BLUETOOTH_SCAN,
-                                    Manifest.permission.BLUETOOTH_CONNECT,
-                                    Manifest.permission.ACCESS_FINE_LOCATION
-                                )
-                            } else {
-                                arrayOf(
-                                    Manifest.permission.BLUETOOTH,
-                                    Manifest.permission.BLUETOOTH_ADMIN,
-                                    Manifest.permission.ACCESS_FINE_LOCATION
-                                )
+                if (selectedInputSource == SettingsManager.VAL_INPUT_SOURCE_WEAR_OS) {
+                    when (page) {
+                        0 -> WelcomePage()
+                        1 -> InputSourcePage(
+                            selectedSource = selectedInputSource,
+                            onSourceSelected = { selectedInputSource = it }
+                        )
+                        2 -> NotificationPermissionPage(
+                            isGranted = notificationPermissionGranted,
+                            onRequestPermission = {
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                    notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                } else {
+                                    notificationPermissionGranted = true
+                                }
+                            },
+                            onSkip = {
+                                scope.launch {
+                                    pagerState.animateScrollToPage(pagerState.currentPage + 1)
+                                }
                             }
-                            bluetoothPermissionsLauncher.launch(permissions)
-                        },
-                        onEnableBluetooth = {
-                            val enableBtIntent = Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)
-                            enableBluetoothLauncher.launch(enableBtIntent)
-                        }
-                    )
-                    2 -> NotificationPermissionPage(
-                        isGranted = notificationPermissionGranted,
-                        onRequestPermission = {
-                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                            } else {
-                                notificationPermissionGranted = true
+                        )
+                        3 -> OscSetupPage(
+                            hostText = hostText,
+                            portText = portText,
+                            onHostChanged = { hostText = it },
+                            onPortChanged = { portText = it }
+                        )
+                        4 -> CompletePage()
+                    }
+                } else {
+                    when (page) {
+                        0 -> WelcomePage()
+                        1 -> InputSourcePage(
+                            selectedSource = selectedInputSource,
+                            onSourceSelected = { selectedInputSource = it }
+                        )
+                        2 -> BluetoothPermissionPage(
+                            isGranted = bluetoothPermissionsGranted,
+                            isBluetoothEnabled = bluetoothEnabledState,
+                            onRequestPermission = {
+                                val permissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                                    arrayOf(
+                                        Manifest.permission.BLUETOOTH_SCAN,
+                                        Manifest.permission.BLUETOOTH_CONNECT,
+                                        Manifest.permission.ACCESS_FINE_LOCATION
+                                    )
+                                } else {
+                                    arrayOf(
+                                        Manifest.permission.BLUETOOTH,
+                                        Manifest.permission.BLUETOOTH_ADMIN,
+                                        Manifest.permission.ACCESS_FINE_LOCATION
+                                    )
+                                }
+                                bluetoothPermissionsLauncher.launch(permissions)
+                            },
+                            onEnableBluetooth = {
+                                val enableBtIntent = Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)
+                                enableBluetoothLauncher.launch(enableBtIntent)
                             }
-                        },
-                        onSkip = {
-                            scope.launch {
-                                pagerState.animateScrollToPage(pagerState.currentPage + 1)
+                        )
+                        3 -> NotificationPermissionPage(
+                            isGranted = notificationPermissionGranted,
+                            onRequestPermission = {
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                    notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                } else {
+                                    notificationPermissionGranted = true
+                                }
+                            },
+                            onSkip = {
+                                scope.launch {
+                                    pagerState.animateScrollToPage(pagerState.currentPage + 1)
+                                }
                             }
-                        }
-                    )
-                    3 -> OscSetupPage(
-                        hostText = hostText,
-                        portText = portText,
-                        onHostChanged = { hostText = it },
-                        onPortChanged = { portText = it }
-                    )
-                    4 -> CompletePage()
+                        )
+                        4 -> OscSetupPage(
+                            hostText = hostText,
+                            portText = portText,
+                            onHostChanged = { hostText = it },
+                            onPortChanged = { portText = it }
+                        )
+                        5 -> CompletePage()
+                    }
                 }
             }
 
@@ -218,7 +258,7 @@ fun OnboardingScreen(
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    repeat(5) { index ->
+                    repeat(pageCount) { index ->
                         Box(
                             modifier = Modifier
                                 .size(8.dp)
@@ -236,13 +276,14 @@ fun OnboardingScreen(
                 // Next/Complete button
                 Button(
                     onClick = {
-                        if (pagerState.currentPage == 4) {
+                        if (pagerState.currentPage == pageCount - 1) {
                             // Save OSC settings
                             viewModel.setOscHost(hostText)
                             val port = portText.toIntOrNull()
                             if (port != null && port in 1..65535) {
                                 viewModel.setOscPort(port)
                             }
+                            viewModel.setInputSource(selectedInputSource)
                             onComplete()
                         } else {
                             scope.launch {
@@ -250,14 +291,20 @@ fun OnboardingScreen(
                             }
                         }
                     },
-                    enabled = when (pagerState.currentPage) {
-                        1 -> bluetoothPermissionsGranted && bluetoothEnabledState
-                        2 -> true // Always allow advancing from notification page (can skip)
-                        3 -> hostText.isNotBlank() && portText.toIntOrNull()?.let { it in 1..65535 } == true
-                        else -> true
+                    enabled = if (selectedInputSource == SettingsManager.VAL_INPUT_SOURCE_WEAR_OS) {
+                        when (pagerState.currentPage) {
+                            3 -> hostText.isNotBlank() && portText.toIntOrNull()?.let { it in 1..65535 } == true
+                            else -> true
+                        }
+                    } else {
+                        when (pagerState.currentPage) {
+                            2 -> bluetoothPermissionsGranted && bluetoothEnabledState
+                            4 -> hostText.isNotBlank() && portText.toIntOrNull()?.let { it in 1..65535 } == true
+                            else -> true
+                        }
                     }
                 ) {
-                    Text(if (pagerState.currentPage == 4) stringResource(R.string.onboarding_button_get_started) else stringResource(R.string.onboarding_button_next))
+                    Text(if (pagerState.currentPage == pageCount - 1) stringResource(R.string.onboarding_button_get_started) else stringResource(R.string.onboarding_button_next))
                 }
             }
         }
@@ -587,5 +634,135 @@ fun CompletePage() {
             textAlign = TextAlign.Center,
             color = MaterialTheme.colorScheme.onSurface
         )
+    }
+}
+
+@Composable
+fun InputSourcePage(
+    selectedSource: String,
+    onSourceSelected: (String) -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(32.dp)
+            .verticalScroll(rememberScrollState()),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Text(
+            text = stringResource(R.string.settings_section_input_source),
+            fontSize = 28.sp,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary,
+            textAlign = TextAlign.Center
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text(
+            text = "Choose how you want to receive heart rate data.",
+            fontSize = 16.sp,
+            textAlign = TextAlign.Center,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+
+        Spacer(modifier = Modifier.height(32.dp))
+
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { onSourceSelected(SettingsManager.VAL_INPUT_SOURCE_BLE) },
+            colors = CardDefaults.cardColors(
+                containerColor = if (selectedSource == SettingsManager.VAL_INPUT_SOURCE_BLE)
+                    MaterialTheme.colorScheme.primaryContainer
+                else
+                    MaterialTheme.colorScheme.surfaceVariant
+            ),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(20.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Bluetooth,
+                    contentDescription = null,
+                    modifier = Modifier.size(36.dp),
+                    tint = if (selectedSource == SettingsManager.VAL_INPUT_SOURCE_BLE)
+                        MaterialTheme.colorScheme.primary
+                    else
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.width(16.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = stringResource(R.string.input_source_ble),
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 18.sp
+                    )
+                    Text(
+                        text = "Connect directly to a Bluetooth Heart Rate Monitor strap or band.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                    )
+                }
+                RadioButton(
+                    selected = selectedSource == SettingsManager.VAL_INPUT_SOURCE_BLE,
+                    onClick = { onSourceSelected(SettingsManager.VAL_INPUT_SOURCE_BLE) }
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { onSourceSelected(SettingsManager.VAL_INPUT_SOURCE_WEAR_OS) },
+            colors = CardDefaults.cardColors(
+                containerColor = if (selectedSource == SettingsManager.VAL_INPUT_SOURCE_WEAR_OS)
+                    MaterialTheme.colorScheme.primaryContainer
+                else
+                    MaterialTheme.colorScheme.surfaceVariant
+            ),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(20.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Watch,
+                    contentDescription = null,
+                    modifier = Modifier.size(36.dp),
+                    tint = if (selectedSource == SettingsManager.VAL_INPUT_SOURCE_WEAR_OS)
+                        MaterialTheme.colorScheme.primary
+                    else
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.width(16.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = stringResource(R.string.input_source_wearos),
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 18.sp
+                    )
+                    Text(
+                        text = "Stream heart rate from the HeartOSC Wear OS companion app on your watch.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                    )
+                }
+                RadioButton(
+                    selected = selectedSource == SettingsManager.VAL_INPUT_SOURCE_WEAR_OS,
+                    onClick = { onSourceSelected(SettingsManager.VAL_INPUT_SOURCE_WEAR_OS) }
+                )
+            }
+        }
     }
 }

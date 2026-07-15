@@ -162,7 +162,7 @@ fun MainScreen(
                         onNavigateToDeviceList()
                     }
                 },
-                enabled = isWearOS || (permissionsGranted && bluetoothEnabled),
+                enabled = if (isWearOS) permissionsGranted else (permissionsGranted && bluetoothEnabled),
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp)
@@ -181,12 +181,13 @@ fun MainScreen(
                 )
             }
 
-            if (!isWearOS && (!permissionsGranted || !bluetoothEnabled)) {
+            val showError = if (isWearOS) !permissionsGranted else (!permissionsGranted || !bluetoothEnabled)
+            if (showError) {
                 Spacer(modifier = Modifier.height(16.dp))
                 Text(
                     text = when {
                         !permissionsGranted -> stringResource(R.string.error_bluetooth_permissions)
-                        !bluetoothEnabled -> stringResource(R.string.error_bluetooth_disabled)
+                        !isWearOS && !bluetoothEnabled -> stringResource(R.string.error_bluetooth_disabled)
                         else -> ""
                     },
                     style = MaterialTheme.typography.bodyMedium,

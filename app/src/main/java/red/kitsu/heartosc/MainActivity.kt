@@ -65,9 +65,13 @@ class MainActivity : ComponentActivity() {
             // Set disconnect callback
             heartRateService.onDisconnectRequested = {
                 Log.d("MainActivity", "Disconnect requested from notification")
-                // Permission already granted (service only runs when connected)
-                @SuppressLint("MissingPermission")
-                viewModelInstance?.disconnect()
+                if (viewModelInstance?.inputSource?.value == SettingsManager.VAL_INPUT_SOURCE_WEAR_OS) {
+                    viewModelInstance?.toggleWearOSConnection()
+                } else {
+                    // Permission already granted (service only runs when connected)
+                    @SuppressLint("MissingPermission")
+                    viewModelInstance?.disconnect()
+                }
             }
             serviceBound = true
             Log.d("MainActivity", "Service connected and bound")
@@ -104,7 +108,7 @@ class MainActivity : ComponentActivity() {
                             )
                         }
 
-                        if (!bluetoothEnabled) {
+                        if (!bluetoothEnabled && viewModel.inputSource.value != SettingsManager.VAL_INPUT_SOURCE_WEAR_OS) {
                             val enableBtIntent = Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)
                             enableBluetoothLauncher.launch(enableBtIntent)
                         }

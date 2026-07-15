@@ -238,6 +238,6 @@ class HeartRateViewModel(application: Application) : AndroidViewModel(applicatio
         pulseGenerator.cleanup()
         oscSender?.cleanup()
         heartRateManager.cleanup()
-        wearOSManager.cleanup()
+        wearOSManager.destroy()
     }
 }
