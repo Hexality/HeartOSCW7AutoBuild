@@ -1,6 +1,13 @@
 package red.kitsu.heartosc
 
 import android.annotation.SuppressLint
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -25,12 +32,37 @@ fun MainScreen(
     onNavigateToSettings: () -> Unit,
     onNavigateToAbout: () -> Unit,
     permissionsGranted: Boolean,
+    wearOSPermissionsGranted: Boolean,
     bluetoothEnabled: Boolean
 ) {
     val connectionState by viewModel.connectionState.collectAsState()
     val heartRate by viewModel.heartRate.collectAsState()
     val heartbeatPulse by viewModel.heartbeatPulse.collectAsState()
     val inputSource by viewModel.inputSource.collectAsState()
+
+    val context = LocalContext.current
+    var wearOSPermissionState by remember {
+        mutableStateOf(
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED
+            } else {
+                true
+            }
+        )
+    }
+
+    LaunchedEffect(wearOSPermissionsGranted) {
+        wearOSPermissionState = wearOSPermissionsGranted
+    }
+
+    val requestPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        wearOSPermissionState = isGranted
+        if (isGranted) {
+            viewModel.toggleWearOSConnection()
+        }
+    }
 
     val isWearOS = inputSource == SettingsManager.VAL_INPUT_SOURCE_WEAR_OS
     val isConnected = connectionState is HeartRateMonitorManager.ConnectionState.Connected ||
@@ -153,7 +185,13 @@ fun MainScreen(
             Button(
                 onClick = {
                     if (isWearOS) {
-                        viewModel.toggleWearOSConnection()
+                        if (wearOSPermissionState) {
+                            viewModel.toggleWearOSConnection()
+                        } else {
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                                requestPermissionLauncher.launch(Manifest.permission.BLUETOOTH_CONNECT)
+                            }
+                        }
                     } else if (isConnected) {
                         // Button only enabled when permissionsGranted is true
                         @SuppressLint("MissingPermission")
@@ -162,7 +200,7 @@ fun MainScreen(
                         onNavigateToDeviceList()
                     }
                 },
-                enabled = if (isWearOS) permissionsGranted else (permissionsGranted && bluetoothEnabled),
+                enabled = isWearOS || (permissionsGranted && bluetoothEnabled),
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp)
@@ -181,12 +219,13 @@ fun MainScreen(
                 )
             }
 
-            val showError = if (isWearOS) !permissionsGranted else (!permissionsGranted || !bluetoothEnabled)
+            val showError = if (isWearOS) !wearOSPermissionState else (!permissionsGranted || !bluetoothEnabled)
             if (showError) {
                 Spacer(modifier = Modifier.height(16.dp))
                 Text(
                     text = when {
-                        !permissionsGranted -> stringResource(R.string.error_bluetooth_permissions)
+                        isWearOS && !wearOSPermissionState -> stringResource(R.string.error_bluetooth_permissions)
+                        !isWearOS && !permissionsGranted -> stringResource(R.string.error_bluetooth_permissions)
                         !isWearOS && !bluetoothEnabled -> stringResource(R.string.error_bluetooth_disabled)
                         else -> ""
                     },

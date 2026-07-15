@@ -7,6 +7,8 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
+import android.content.pm.PackageManager
+import androidx.core.content.ContextCompat
 import android.os.Build
 import android.os.Bundle
 import android.os.IBinder
@@ -51,7 +53,14 @@ class MainActivity : ComponentActivity() {
         bluetoothEnabled = result.resultCode == RESULT_OK
     }
 
+    private val requestWearOSPermissionsLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        wearOSPermissionsGranted = isGranted
+    }
+
     private var permissionsGranted by mutableStateOf(false)
+    private var wearOSPermissionsGranted by mutableStateOf(false)
     private var bluetoothEnabled by mutableStateOf(false)
     private var serviceBound = false
     private var viewModelInstance: HeartRateViewModel? = null
@@ -95,22 +104,31 @@ class MainActivity : ComponentActivity() {
                 val settingsManager = remember { SettingsManager(applicationContext) }
                 var showOnboarding by remember { mutableStateOf(!settingsManager.isOnboardingCompleted()) }
 
-                LaunchedEffect(Unit) {
+                val inputSource by viewModel.inputSource.collectAsState()
+
+                LaunchedEffect(inputSource, showOnboarding) {
                     permissionsGranted = viewModel.checkPermissions()
+                    wearOSPermissionsGranted = checkWearOSPermissions()
                     bluetoothEnabled = viewModel.isBluetoothEnabled()
 
                     // Only auto-request permissions if onboarding is complete
                     if (!showOnboarding) {
-                        if (!permissionsGranted) {
-                            // Only request Bluetooth permissions (notifications are optional)
-                            requestPermissionsLauncher.launch(
-                                HeartRateMonitorManager.REQUIRED_BLUETOOTH_PERMISSIONS
-                            )
-                        }
+                        if (inputSource == SettingsManager.VAL_INPUT_SOURCE_WEAR_OS) {
+                            if (!wearOSPermissionsGranted && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                                requestWearOSPermissionsLauncher.launch(Manifest.permission.BLUETOOTH_CONNECT)
+                            }
+                        } else {
+                            if (!permissionsGranted) {
+                                // Only request Bluetooth permissions (notifications are optional)
+                                requestPermissionsLauncher.launch(
+                                    HeartRateMonitorManager.REQUIRED_BLUETOOTH_PERMISSIONS
+                                )
+                            }
 
-                        if (!bluetoothEnabled && viewModel.inputSource.value != SettingsManager.VAL_INPUT_SOURCE_WEAR_OS) {
-                            val enableBtIntent = Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)
-                            enableBluetoothLauncher.launch(enableBtIntent)
+                            if (!bluetoothEnabled) {
+                                val enableBtIntent = Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)
+                                enableBluetoothLauncher.launch(enableBtIntent)
+                            }
                         }
                     }
                 }
@@ -170,6 +188,7 @@ class MainActivity : ComponentActivity() {
                                 settingsManager.setOnboardingCompleted()
                                 // Re-check permissions and bluetooth state after onboarding
                                 permissionsGranted = viewModel.checkPermissions()
+                                wearOSPermissionsGranted = checkWearOSPermissions()
                                 bluetoothEnabled = viewModel.isBluetoothEnabled()
                                 showOnboarding = false
                             },
@@ -205,6 +224,7 @@ class MainActivity : ComponentActivity() {
                                     navController.navigate("about")
                                 },
                                 permissionsGranted = permissionsGranted,
+                                wearOSPermissionsGranted = wearOSPermissionsGranted,
                                 bluetoothEnabled = bluetoothEnabled
                             )
                         }
@@ -240,6 +260,17 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
+        }
+    }
+
+    private fun checkWearOSPermissions(): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.BLUETOOTH_CONNECT
+            ) == PackageManager.PERMISSION_GRANTED
+        } else {
+            true
         }
     }
 
