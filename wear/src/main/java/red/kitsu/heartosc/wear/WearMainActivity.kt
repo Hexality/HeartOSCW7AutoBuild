@@ -35,6 +35,7 @@ class WearMainActivity : ComponentActivity(), SensorEventListener {
     private var heartRateSensor: Sensor? = null
     private var isMonitoring by mutableStateOf(false)
     private var currentBpm by mutableStateOf(0)
+    private var wakeLock: android.os.PowerManager.WakeLock? = null
 
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -118,12 +119,21 @@ class WearMainActivity : ComponentActivity(), SensorEventListener {
 
     private fun startHeartRateMonitoring() {
         if (isMonitoring) return
+        
+        // Acquire wake lock to keep CPU running when screen goes off
+        val powerManager = getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
+        wakeLock = powerManager.newWakeLock(android.os.PowerManager.PARTIAL_WAKE_LOCK, "HeartOSC::TrackingWakeLock").apply {
+            acquire(10 * 60 * 60 * 1000L) // 10 hours max timeout
+        }
+
         heartRateSensor?.let { sensor ->
             // Use standard or fast delay for real-time tracking
             sensorManager?.registerListener(this, sensor, SensorManager.SENSOR_DELAY_NORMAL)
             isMonitoring = true
-            Log.d(TAG, "Started heart rate sensor monitoring")
+            Log.d(TAG, "Started heart rate sensor monitoring with wake lock")
         } ?: run {
+            wakeLock?.release()
+            wakeLock = null
             Log.e(TAG, "Heart rate sensor not available on this device")
         }
     }
@@ -133,7 +143,13 @@ class WearMainActivity : ComponentActivity(), SensorEventListener {
         sensorManager?.unregisterListener(this)
         isMonitoring = false
         currentBpm = 0
-        Log.d(TAG, "Stopped heart rate sensor monitoring")
+        wakeLock?.let {
+            if (it.isHeld) {
+                it.release()
+            }
+        }
+        wakeLock = null
+        Log.d(TAG, "Stopped heart rate sensor monitoring and released wake lock")
     }
 
     override fun onSensorChanged(event: SensorEvent?) {
