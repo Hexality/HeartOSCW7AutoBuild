@@ -7,6 +7,7 @@ import java.net.DatagramSocket
 import java.net.InetAddress
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import kotlin.math.roundToInt
 
 class VRChatOSCSender(
     private val host: String,
@@ -15,7 +16,8 @@ class VRChatOSCSender(
     private val hrParam: String,
     private val hrConnectedParam: String,
     private val heartbeatToggleParam: String,
-    private val heartbeatPulseParam: String
+    private val heartbeatPulseParam: String,
+    private val vrcoscCompatibilityEnabled: Boolean
 ) {
     companion object {
         private const val TAG = "VRChatOSCSender"
@@ -24,6 +26,7 @@ class VRChatOSCSender(
     private var socket: DatagramSocket? = null
     private var currentHeartRate: Int? = null
     private var isConnected: Boolean = false
+    private val heartRateSamples = ArrayDeque<Pair<Long, Int>>()
     private var toggleObserverJob: Job? = null
     private var pulseObserverJob: Job? = null
 
@@ -44,6 +47,9 @@ class VRChatOSCSender(
         toggleObserverJob = scope.launch {
             pulseGenerator.toggleState.collect { toggleState ->
                 sendBoolParameter(heartbeatToggleParam, toggleState)
+                if (vrcoscCompatibilityEnabled) {
+                    sendBoolParameter(VrcoscHeartrateParameters.BEAT, toggleState)
+                }
                 // Also send connection state with each heartbeat
                 sendBoolParameter(hrConnectedParam, isConnected)
             }
@@ -62,17 +68,58 @@ class VRChatOSCSender(
 
         currentHeartRate = bpm
 
-        // Send HR value
-        bpm?.let {
-            sendIntParameter(hrParam, it)
-            Log.d(TAG, "Sent HR: $it bpm")
+        if (bpm != null) {
+            sendIntParameter(hrParam, bpm)
+            if (vrcoscCompatibilityEnabled) {
+                sendVrcoscHeartRate(bpm)
+            }
+            Log.d(TAG, "Sent HR: $bpm bpm")
+        } else {
+            heartRateSamples.clear()
+            if (vrcoscCompatibilityEnabled) {
+                sendVrcoscHeartRateUnavailable()
+            }
         }
     }
 
     fun updateConnectionState(connected: Boolean) {
         isConnected = connected
         sendBoolParameter(hrConnectedParam, isConnected)
+        if (vrcoscCompatibilityEnabled) {
+            sendBoolParameter(VrcoscHeartrateParameters.CONNECTED, isConnected)
+            sendBoolParameter(VrcoscHeartrateParameters.ENABLED, isConnected)
+        }
         Log.d(TAG, "Sent isHRConnected: $isConnected")
+    }
+
+    private fun sendVrcoscHeartRate(bpm: Int) {
+        val now = System.currentTimeMillis()
+        heartRateSamples.addLast(now to bpm)
+        while (heartRateSamples.firstOrNull()?.first?.let {
+                it + VrcoscHeartrateParameters.AVERAGE_PERIOD_MS <= now
+            } == true
+        ) {
+            heartRateSamples.removeFirst()
+        }
+
+        val average = heartRateSamples.map { it.second }.average().roundToInt()
+        val (units, tens, hundreds) = VrcoscHeartrateParameters.legacyDigits(bpm)
+
+        sendIntParameter(VrcoscHeartrateParameters.VALUE, bpm)
+        sendFloatParameter(VrcoscHeartrateParameters.NORMALISED, VrcoscHeartrateParameters.normalised(bpm))
+        sendIntParameter(VrcoscHeartrateParameters.AVERAGE, average)
+        sendFloatParameter(VrcoscHeartrateParameters.UNITS, units)
+        sendFloatParameter(VrcoscHeartrateParameters.TENS, tens)
+        sendFloatParameter(VrcoscHeartrateParameters.HUNDREDS, hundreds)
+    }
+
+    private fun sendVrcoscHeartRateUnavailable() {
+        sendIntParameter(VrcoscHeartrateParameters.VALUE, 0)
+        sendFloatParameter(VrcoscHeartrateParameters.NORMALISED, 0f)
+        sendIntParameter(VrcoscHeartrateParameters.AVERAGE, 0)
+        sendFloatParameter(VrcoscHeartrateParameters.UNITS, 0f)
+        sendFloatParameter(VrcoscHeartrateParameters.TENS, 0f)
+        sendFloatParameter(VrcoscHeartrateParameters.HUNDREDS, 0f)
     }
 
     private fun sendIntParameter(address: String, value: Int) {
@@ -97,6 +144,17 @@ class VRChatOSCSender(
         }
     }
 
+    private fun sendFloatParameter(address: String, value: Float) {
+        scope.launch {
+            try {
+                val message = buildOSCMessage(address, value)
+                sendMessage(message)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to send float parameter $address", e)
+            }
+        }
+    }
+
     private fun buildOSCMessage(address: String, value: Int): ByteArray {
         val addressBytes = padString(address)
         val typeTag = padString(",i")
@@ -111,6 +169,14 @@ class VRChatOSCSender(
         val typeTag = padString(if (value) ",T" else ",F")
 
         return addressBytes + typeTag
+    }
+
+    private fun buildOSCMessage(address: String, value: Float): ByteArray {
+        val addressBytes = padString(address)
+        val typeTag = padString(",f")
+        val valueBytes = ByteBuffer.allocate(4).order(ByteOrder.BIG_ENDIAN).putFloat(value).array()
+
+        return addressBytes + typeTag + valueBytes
     }
 
     private fun padString(str: String): ByteArray {

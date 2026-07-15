@@ -17,6 +17,7 @@ class SettingsManager(context: Context) {
         private const val KEY_HEARTBEAT_TOGGLE_PARAM = "heartbeat_toggle_param"
         private const val KEY_HEARTBEAT_PULSE_PARAM = "heartbeat_pulse_param"
         private const val KEY_HEARTBEAT_PULSE_DURATION = "heartbeat_pulse_duration"
+        private const val KEY_VRCOSC_COMPATIBILITY_ENABLED = "vrcosc_compatibility_enabled"
         private const val KEY_ONBOARDING_COMPLETED = "onboarding_completed"
 
         const val DEFAULT_OSC_HOST = "192.168.1.10"
@@ -26,6 +27,7 @@ class SettingsManager(context: Context) {
         const val DEFAULT_HEARTBEAT_TOGGLE_PARAM = "/avatar/parameters/HeartBeatToggle"
         const val DEFAULT_HEARTBEAT_PULSE_PARAM = "/avatar/parameters/isHRBeat"
         const val DEFAULT_HEARTBEAT_PULSE_DURATION = 200 // milliseconds
+        const val DEFAULT_VRCOSC_COMPATIBILITY_ENABLED = true
     }
 
     private val prefs: SharedPreferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -50,6 +52,11 @@ class SettingsManager(context: Context) {
 
     private val _heartbeatPulseDuration = MutableStateFlow(prefs.getInt(KEY_HEARTBEAT_PULSE_DURATION, DEFAULT_HEARTBEAT_PULSE_DURATION))
     val heartbeatPulseDuration: StateFlow<Int> = _heartbeatPulseDuration.asStateFlow()
+
+    private val _vrcoscCompatibilityEnabled = MutableStateFlow(
+        prefs.getBoolean(KEY_VRCOSC_COMPATIBILITY_ENABLED, DEFAULT_VRCOSC_COMPATIBILITY_ENABLED)
+    )
+    val vrcoscCompatibilityEnabled: StateFlow<Boolean> = _vrcoscCompatibilityEnabled.asStateFlow()
 
     fun setOscHost(host: String) {
         _oscHost.value = host
@@ -84,6 +91,11 @@ class SettingsManager(context: Context) {
     fun setHeartbeatPulseDuration(duration: Int) {
         _heartbeatPulseDuration.value = duration
         prefs.edit().putInt(KEY_HEARTBEAT_PULSE_DURATION, duration).apply()
+    }
+
+    fun setVrcoscCompatibilityEnabled(enabled: Boolean) {
+        _vrcoscCompatibilityEnabled.value = enabled
+        prefs.edit().putBoolean(KEY_VRCOSC_COMPATIBILITY_ENABLED, enabled).apply()
     }
 
     fun isOnboardingCompleted(): Boolean {
