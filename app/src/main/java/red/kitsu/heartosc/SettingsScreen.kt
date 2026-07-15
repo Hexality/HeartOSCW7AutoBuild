@@ -10,6 +10,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Bluetooth
 import androidx.compose.material.icons.filled.Watch
 import androidx.compose.material3.*
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -87,7 +88,9 @@ fun SettingsScreen(
                     Icon(
                         imageVector = Icons.Default.Bluetooth,
                         contentDescription = null,
-                        tint = if (inputSourceState == SettingsManager.VAL_INPUT_SOURCE_BLE) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                        tint = if (inputSourceState == SettingsManager.VAL_INPUT_SOURCE_BLE) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(
+                            alpha = 0.6f
+                        ),
                         modifier = Modifier.size(24.dp)
                     )
                     Spacer(modifier = Modifier.width(16.dp))
@@ -112,7 +115,9 @@ fun SettingsScreen(
                     Icon(
                         imageVector = Icons.Default.Watch,
                         contentDescription = null,
-                        tint = if (inputSourceState == SettingsManager.VAL_INPUT_SOURCE_WEAR_OS) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                        tint = if (inputSourceState == SettingsManager.VAL_INPUT_SOURCE_WEAR_OS) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(
+                            alpha = 0.6f
+                        ),
                         modifier = Modifier.size(24.dp)
                     )
                     Spacer(modifier = Modifier.width(16.dp))
@@ -128,10 +133,10 @@ fun SettingsScreen(
                 }
             }
 
-            Divider(
+            HorizontalDivider(
                 modifier = Modifier.fillMaxWidth(),
-                color = MaterialTheme.colorScheme.outlineVariant,
-                thickness = 1.dp
+                thickness = 1.dp,
+                color = MaterialTheme.colorScheme.outlineVariant
             )
 
             Text(
@@ -172,7 +177,7 @@ fun SettingsScreen(
                 modifier = Modifier.fillMaxWidth(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 isError = portText.isNotEmpty() && (portText.toIntOrNull() == null ||
-                         portText.toInt() !in 1..65535)
+                        portText.toInt() !in 1..65535)
             )
 
             Text(
@@ -273,7 +278,7 @@ fun SettingsScreen(
                 modifier = Modifier.fillMaxWidth(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 isError = heartbeatPulseDurationText.isNotEmpty() && (heartbeatPulseDurationText.toIntOrNull() == null ||
-                         heartbeatPulseDurationText.toInt() !in 1..5000)
+                        heartbeatPulseDurationText.toInt() !in 1..5000)
             )
 
             Text(
@@ -304,14 +309,14 @@ fun SettingsScreen(
                     onBackPressed()
                 },
                 enabled = hostText.isNotBlank() &&
-                         portText.isNotEmpty() &&
-                         portText.toIntOrNull()?.let { it in 1..65535 } == true &&
-                         hrParamText.isNotBlank() &&
-                         hrConnectedParamText.isNotBlank() &&
-                         heartbeatToggleParamText.isNotBlank() &&
-                         heartbeatPulseParamText.isNotBlank() &&
-                         heartbeatPulseDurationText.isNotEmpty() &&
-                         heartbeatPulseDurationText.toIntOrNull()?.let { it in 1..5000 } == true,
+                        portText.isNotEmpty() &&
+                        portText.toIntOrNull()?.let { it in 1..65535 } == true &&
+                        hrParamText.isNotBlank() &&
+                        hrConnectedParamText.isNotBlank() &&
+                        heartbeatToggleParamText.isNotBlank() &&
+                        heartbeatPulseParamText.isNotBlank() &&
+                        heartbeatPulseDurationText.isNotEmpty() &&
+                        heartbeatPulseDurationText.toIntOrNull()?.let { it in 1..5000 } == true,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text(stringResource(R.string.common_save))
@@ -326,7 +331,8 @@ fun SettingsScreen(
                     hrConnectedParamText = SettingsManager.DEFAULT_HR_CONNECTED_PARAM
                     heartbeatToggleParamText = SettingsManager.DEFAULT_HEARTBEAT_TOGGLE_PARAM
                     heartbeatPulseParamText = SettingsManager.DEFAULT_HEARTBEAT_PULSE_PARAM
-                    heartbeatPulseDurationText = SettingsManager.DEFAULT_HEARTBEAT_PULSE_DURATION.toString()
+                    heartbeatPulseDurationText =
+                        SettingsManager.DEFAULT_HEARTBEAT_PULSE_DURATION.toString()
                 },
                 modifier = Modifier.fillMaxWidth()
             ) {

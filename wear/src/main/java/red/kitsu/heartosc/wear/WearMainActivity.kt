@@ -32,6 +32,7 @@ import androidx.core.content.ContextCompat
 import com.google.android.gms.wearable.Wearable
 import kotlinx.coroutines.delay
 import java.nio.ByteBuffer
+import kotlin.time.Duration.Companion.milliseconds
 
 class WearMainActivity : ComponentActivity(), SensorEventListener {
     companion object {
@@ -65,12 +66,12 @@ class WearMainActivity : ComponentActivity(), SensorEventListener {
         setContent {
             WearHeartOSCTheme {
                 var isDimmed by remember { mutableStateOf(false) }
-                var interactionCount by remember { mutableStateOf(0) }
+                var interactionCount by remember { mutableIntStateOf(0) }
 
                 // Reset timer when interaction count changes, and dim after 10 seconds of inactivity
                 LaunchedEffect(interactionCount, isDimmed) {
                     if (!isDimmed) {
-                        delay(10000L)
+                        delay(10000L.milliseconds)
                         isDimmed = true
                     }
                 }
@@ -183,7 +184,7 @@ class WearMainActivity : ComponentActivity(), SensorEventListener {
         if (isMonitoring) return
         
         // Acquire wake lock to keep CPU running when screen goes off
-        val powerManager = getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
+        val powerManager = getSystemService(POWER_SERVICE) as android.os.PowerManager
         wakeLock = powerManager.newWakeLock(android.os.PowerManager.PARTIAL_WAKE_LOCK, "HeartOSC::TrackingWakeLock").apply {
             acquire(10 * 60 * 60 * 1000L) // 10 hours max timeout
         }
