@@ -4,8 +4,11 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Bluetooth
+import androidx.compose.material.icons.filled.Watch
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -70,25 +73,58 @@ fun SettingsScreen(
                 color = MaterialTheme.colorScheme.primary
             )
 
-            Row(
+            Column(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(24.dp)
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { inputSourceState = SettingsManager.VAL_INPUT_SOURCE_BLE }
+                        .padding(vertical = 8.dp, horizontal = 4.dp),
+                    verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Bluetooth,
+                        contentDescription = null,
+                        tint = if (inputSourceState == SettingsManager.VAL_INPUT_SOURCE_BLE) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Text(
+                        text = stringResource(R.string.input_source_ble),
+                        style = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier.weight(1f)
+                    )
                     RadioButton(
                         selected = inputSourceState == SettingsManager.VAL_INPUT_SOURCE_BLE,
                         onClick = { inputSourceState = SettingsManager.VAL_INPUT_SOURCE_BLE }
                     )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(stringResource(R.string.input_source_ble))
                 }
-                Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { inputSourceState = SettingsManager.VAL_INPUT_SOURCE_WEAR_OS }
+                        .padding(vertical = 8.dp, horizontal = 4.dp),
+                    verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Watch,
+                        contentDescription = null,
+                        tint = if (inputSourceState == SettingsManager.VAL_INPUT_SOURCE_WEAR_OS) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Text(
+                        text = stringResource(R.string.input_source_wearos),
+                        style = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier.weight(1f)
+                    )
                     RadioButton(
                         selected = inputSourceState == SettingsManager.VAL_INPUT_SOURCE_WEAR_OS,
                         onClick = { inputSourceState = SettingsManager.VAL_INPUT_SOURCE_WEAR_OS }
                     )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(stringResource(R.string.input_source_wearos))
                 }
             }
 
