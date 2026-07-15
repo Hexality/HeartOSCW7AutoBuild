@@ -6,8 +6,10 @@ import android.bluetooth.BluetoothDevice
 import androidx.annotation.RequiresPermission
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 
 private data class OscConfig(
@@ -22,18 +24,24 @@ private data class OscConfig(
 class HeartRateViewModel(application: Application) : AndroidViewModel(application) {
 
     private val heartRateManager = HeartRateMonitorManager(application)
+    private val wearOSManager = WearOSManager(application)
     private val settingsManager = SettingsManager(application)
     private val pulseGenerator = HeartbeatPulseGenerator(viewModelScope)
     private var oscSender: VRChatOSCSender? = null
     var heartRateService: HeartRateService? = null
 
-    val connectionState = heartRateManager.connectionState
-    val heartRate = heartRateManager.heartRate
+    private val _connectionState = MutableStateFlow<HeartRateMonitorManager.ConnectionState>(HeartRateMonitorManager.ConnectionState.Disconnected)
+    val connectionState: StateFlow<HeartRateMonitorManager.ConnectionState> = _connectionState.asStateFlow()
+
+    private val _heartRate = MutableStateFlow<Int?>(null)
+    val heartRate: StateFlow<Int?> = _heartRate.asStateFlow()
+
     val energyExpended = heartRateManager.energyExpended
     val rrIntervals = heartRateManager.rrIntervals
     val discoveredDevices = heartRateManager.discoveredDevices
     val scanningState = heartRateManager.scanningState
 
+    val inputSource = settingsManager.inputSource
     val oscHost = settingsManager.oscHost
     val oscPort = settingsManager.oscPort
     val hrParam = settingsManager.hrParam
@@ -46,6 +54,38 @@ class HeartRateViewModel(application: Application) : AndroidViewModel(applicatio
     val heartbeatPulse = pulseGenerator.pulseState
 
     init {
+        // Route connectionState based on active inputSource
+        viewModelScope.launch {
+            combine(inputSource, heartRateManager.connectionState, wearOSManager.connectionState) { source, bleState, wearState ->
+                if (source == SettingsManager.VAL_INPUT_SOURCE_WEAR_OS) wearState else bleState
+            }.collect { state ->
+                _connectionState.value = state
+            }
+        }
+
+        // Route heartRate based on active inputSource
+        viewModelScope.launch {
+            combine(inputSource, heartRateManager.heartRate, wearOSManager.heartRate) { source, bleHr, wearHr ->
+                if (source == SettingsManager.VAL_INPUT_SOURCE_WEAR_OS) wearHr else bleHr
+            }.collect { bpm ->
+                _heartRate.value = bpm
+            }
+        }
+
+        // Stop active source when switching input sources
+        viewModelScope.launch {
+            inputSource.collect { source ->
+                if (source == SettingsManager.VAL_INPUT_SOURCE_WEAR_OS) {
+                    @Suppress("MissingPermission")
+                    heartRateManager.cleanup()
+                } else {
+                    wearOSManager.cleanup()
+                }
+                _connectionState.value = HeartRateMonitorManager.ConnectionState.Disconnected
+                _heartRate.value = null
+            }
+        }
+
         // Initialize OSC sender with current settings
         viewModelScope.launch {
             combine(
@@ -152,6 +192,18 @@ class HeartRateViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
+    fun toggleWearOSConnection() {
+        if (connectionState.value is HeartRateMonitorManager.ConnectionState.Disconnected) {
+            wearOSManager.startListening()
+        } else {
+            wearOSManager.stopListening()
+        }
+    }
+
+    fun setInputSource(source: String) {
+        settingsManager.setInputSource(source)
+    }
+
     fun setOscHost(host: String) {
         settingsManager.setOscHost(host)
     }
@@ -186,5 +238,6 @@ class HeartRateViewModel(application: Application) : AndroidViewModel(applicatio
         pulseGenerator.cleanup()
         oscSender?.cleanup()
         heartRateManager.cleanup()
+        wearOSManager.cleanup()
     }
 }

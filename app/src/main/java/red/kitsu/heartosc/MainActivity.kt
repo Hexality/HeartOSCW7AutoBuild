@@ -116,7 +116,9 @@ class MainActivity : ComponentActivity() {
                 LaunchedEffect(connectionState) {
                     val isConnected = connectionState is HeartRateMonitorManager.ConnectionState.Connected ||
                                      connectionState is HeartRateMonitorManager.ConnectionState.Discovering ||
-                                     connectionState is HeartRateMonitorManager.ConnectionState.Reconnecting
+                                     connectionState is HeartRateMonitorManager.ConnectionState.Reconnecting ||
+                                     (viewModel.inputSource.value == SettingsManager.VAL_INPUT_SOURCE_WEAR_OS &&
+                                      connectionState is HeartRateMonitorManager.ConnectionState.Connecting)
                     val serviceRunning = HeartRateService.isRunning()
 
                     Log.d("MainActivity", "Connection state: $connectionState, isConnected: $isConnected, serviceRunning: $serviceRunning")

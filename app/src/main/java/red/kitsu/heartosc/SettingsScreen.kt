@@ -19,6 +19,7 @@ fun SettingsScreen(
     viewModel: HeartRateViewModel,
     onBackPressed: () -> Unit
 ) {
+    val inputSource by viewModel.inputSource.collectAsState()
     val oscHost by viewModel.oscHost.collectAsState()
     val oscPort by viewModel.oscPort.collectAsState()
     val hrParam by viewModel.hrParam.collectAsState()
@@ -27,6 +28,7 @@ fun SettingsScreen(
     val heartbeatPulseParam by viewModel.heartbeatPulseParam.collectAsState()
     val heartbeatPulseDuration by viewModel.heartbeatPulseDuration.collectAsState()
 
+    var inputSourceState by remember(inputSource) { mutableStateOf(inputSource) }
     var hostText by remember(oscHost) { mutableStateOf(oscHost) }
     var portText by remember(oscPort) { mutableStateOf(oscPort.toString()) }
     var hrParamText by remember(hrParam) { mutableStateOf(hrParam) }
@@ -62,6 +64,40 @@ fun SettingsScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            Text(
+                text = stringResource(R.string.settings_section_input_source),
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.primary
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(24.dp)
+            ) {
+                Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                    RadioButton(
+                        selected = inputSourceState == SettingsManager.VAL_INPUT_SOURCE_BLE,
+                        onClick = { inputSourceState = SettingsManager.VAL_INPUT_SOURCE_BLE }
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(stringResource(R.string.input_source_ble))
+                }
+                Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                    RadioButton(
+                        selected = inputSourceState == SettingsManager.VAL_INPUT_SOURCE_WEAR_OS,
+                        onClick = { inputSourceState = SettingsManager.VAL_INPUT_SOURCE_WEAR_OS }
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(stringResource(R.string.input_source_wearos))
+                }
+            }
+
+            Divider(
+                modifier = Modifier.fillMaxWidth(),
+                color = MaterialTheme.colorScheme.outlineVariant,
+                thickness = 1.dp
+            )
+
             Text(
                 text = stringResource(R.string.settings_section_osc_config),
                 style = MaterialTheme.typography.titleLarge,
@@ -215,6 +251,7 @@ fun SettingsScreen(
 
             Button(
                 onClick = {
+                    viewModel.setInputSource(inputSourceState)
                     viewModel.setOscHost(hostText)
                     val port = portText.toIntOrNull()
                     if (port != null && port in 1..65535) {
@@ -246,6 +283,7 @@ fun SettingsScreen(
 
             OutlinedButton(
                 onClick = {
+                    inputSourceState = SettingsManager.VAL_INPUT_SOURCE_BLE
                     hostText = SettingsManager.DEFAULT_OSC_HOST
                     portText = SettingsManager.DEFAULT_OSC_PORT.toString()
                     hrParamText = SettingsManager.DEFAULT_HR_PARAM

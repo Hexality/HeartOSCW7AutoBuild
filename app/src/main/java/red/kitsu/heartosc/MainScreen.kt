@@ -30,7 +30,9 @@ fun MainScreen(
     val connectionState by viewModel.connectionState.collectAsState()
     val heartRate by viewModel.heartRate.collectAsState()
     val heartbeatPulse by viewModel.heartbeatPulse.collectAsState()
+    val inputSource by viewModel.inputSource.collectAsState()
 
+    val isWearOS = inputSource == SettingsManager.VAL_INPUT_SOURCE_WEAR_OS
     val isConnected = connectionState is HeartRateMonitorManager.ConnectionState.Connected ||
             connectionState is HeartRateMonitorManager.ConnectionState.Discovering ||
             connectionState is HeartRateMonitorManager.ConnectionState.Reconnecting
@@ -119,7 +121,9 @@ fun MainScreen(
             Text(
                 text = when (connectionState) {
                     is HeartRateMonitorManager.ConnectionState.Disconnected -> stringResource(R.string.status_not_connected)
-                    is HeartRateMonitorManager.ConnectionState.Connecting -> stringResource(R.string.status_connecting)
+                    is HeartRateMonitorManager.ConnectionState.Connecting -> {
+                        if (isWearOS) stringResource(R.string.status_waiting_wearos) else stringResource(R.string.status_connecting)
+                    }
                     is HeartRateMonitorManager.ConnectionState.Connected -> stringResource(R.string.status_connected)
                     is HeartRateMonitorManager.ConnectionState.Discovering -> stringResource(R.string.status_discovering)
                     is HeartRateMonitorManager.ConnectionState.Reconnecting -> {
@@ -148,7 +152,9 @@ fun MainScreen(
             // Connect/Disconnect Button
             Button(
                 onClick = {
-                    if (isConnected) {
+                    if (isWearOS) {
+                        viewModel.toggleWearOSConnection()
+                    } else if (isConnected) {
                         // Button only enabled when permissionsGranted is true
                         @SuppressLint("MissingPermission")
                         viewModel.disconnect()
@@ -156,18 +162,26 @@ fun MainScreen(
                         onNavigateToDeviceList()
                     }
                 },
-                enabled = permissionsGranted && bluetoothEnabled,
+                enabled = isWearOS || (permissionsGranted && bluetoothEnabled),
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp)
             ) {
                 Text(
-                    text = if (isConnected) stringResource(R.string.main_button_disconnect) else stringResource(R.string.main_button_connect),
+                    text = if (isWearOS) {
+                        if (connectionState !is HeartRateMonitorManager.ConnectionState.Disconnected) {
+                            stringResource(R.string.main_button_disconnect_wearos)
+                        } else {
+                            stringResource(R.string.main_button_connect_wearos)
+                        }
+                    } else {
+                        if (isConnected) stringResource(R.string.main_button_disconnect) else stringResource(R.string.main_button_connect)
+                    },
                     fontSize = 18.sp
                 )
             }
 
-            if (!permissionsGranted || !bluetoothEnabled) {
+            if (!isWearOS && (!permissionsGranted || !bluetoothEnabled)) {
                 Spacer(modifier = Modifier.height(16.dp))
                 Text(
                     text = when {
