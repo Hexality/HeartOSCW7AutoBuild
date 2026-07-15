@@ -36,4 +36,25 @@ class VrcoscHeartrateParametersTest {
             VrcoscHeartrateParameters.legacyDigits(345)
         )
     }
+
+    @Test
+    fun `average includes repeated heart rate samples`() {
+        val tracker = VrcoscHeartRateTracker()
+
+        repeat(10) { second ->
+            tracker.record(HeartRateSample(80, second * 1_000L))
+        }
+        val values = tracker.record(HeartRateSample(100, 10_000L))
+
+        assertEquals(82, values.average)
+    }
+
+    @Test
+    fun `receiving status expires after VRCOSC timeout`() {
+        val tracker = VrcoscHeartRateTracker()
+        tracker.record(HeartRateSample(80, 1_000L))
+
+        assertEquals(true, tracker.isReceiving(31_000L))
+        assertEquals(false, tracker.isReceiving(31_001L))
+    }
 }

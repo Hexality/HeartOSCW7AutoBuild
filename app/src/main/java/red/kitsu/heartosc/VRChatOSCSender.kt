@@ -7,7 +7,6 @@ import java.net.DatagramSocket
 import java.net.InetAddress
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
-import kotlin.math.roundToInt
 
 class VRChatOSCSender(
     private val host: String,
@@ -17,7 +16,7 @@ class VRChatOSCSender(
     private val hrConnectedParam: String,
     private val heartbeatToggleParam: String,
     private val heartbeatPulseParam: String,
-    private val vrcoscCompatibilityEnabled: Boolean
+    val vrcoscCompatibilityEnabled: Boolean
 ) {
     companion object {
         private const val TAG = "VRChatOSCSender"
@@ -26,11 +25,13 @@ class VRChatOSCSender(
     private var socket: DatagramSocket? = null
     private var currentHeartRate: Int? = null
     private var isConnected: Boolean = false
-    private val heartRateSamples = ArrayDeque<Pair<Long, Int>>()
+    private val vrcoscTracker = VrcoscHeartRateTracker()
     private var toggleObserverJob: Job? = null
     private var pulseObserverJob: Job? = null
+    private var receivingTimeoutJob: Job? = null
 
-    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private val scopeJob = SupervisorJob()
+    private val scope = CoroutineScope(Dispatchers.IO + scopeJob)
 
     init {
         try {
@@ -47,7 +48,9 @@ class VRChatOSCSender(
         toggleObserverJob = scope.launch {
             pulseGenerator.toggleState.collect { toggleState ->
                 sendBoolParameter(heartbeatToggleParam, toggleState)
-                if (vrcoscCompatibilityEnabled) {
+                if (vrcoscCompatibilityEnabled &&
+                    vrcoscTracker.isReceiving(System.currentTimeMillis())
+                ) {
                     sendBoolParameter(VrcoscHeartrateParameters.BEAT, toggleState)
                 }
                 // Also send connection state with each heartbeat
@@ -63,54 +66,62 @@ class VRChatOSCSender(
         }
     }
 
-    fun updateHeartRate(bpm: Int?) {
-        if (currentHeartRate == bpm) return
+    internal fun updateHeartRateSample(sample: HeartRateSample) {
+        if (currentHeartRate != sample.bpm) {
+            currentHeartRate = sample.bpm
+            sendIntParameter(hrParam, sample.bpm)
+            Log.d(TAG, "Sent HR: ${sample.bpm} bpm")
+        }
 
-        currentHeartRate = bpm
+        if (vrcoscCompatibilityEnabled) {
+            val values = vrcoscTracker.record(sample)
+            sendVrcoscAvailability(true)
+            sendVrcoscHeartRate(values)
+            scheduleReceivingTimeout()
+        }
+    }
 
-        if (bpm != null) {
-            sendIntParameter(hrParam, bpm)
-            if (vrcoscCompatibilityEnabled) {
-                sendVrcoscHeartRate(bpm)
-            }
-            Log.d(TAG, "Sent HR: $bpm bpm")
-        } else {
-            heartRateSamples.clear()
-            if (vrcoscCompatibilityEnabled) {
-                sendVrcoscHeartRateUnavailable()
-            }
+    internal fun replayHeartRate(sample: HeartRateSample?) {
+        if (sample == null ||
+            sample.receivedAtMillis + VrcoscHeartrateParameters.RECEIVING_TIMEOUT_MS < System.currentTimeMillis()
+        ) {
+            markHeartRateUnavailable()
+            return
+        }
+
+        updateHeartRateSample(sample)
+    }
+
+    fun markHeartRateUnavailable() {
+        currentHeartRate = null
+        receivingTimeoutJob?.cancel()
+        receivingTimeoutJob = null
+        vrcoscTracker.clear()
+        if (vrcoscCompatibilityEnabled) {
+            sendVrcoscAvailability(false)
+            sendBoolParameter(VrcoscHeartrateParameters.BEAT, false)
+            sendVrcoscHeartRateUnavailable()
         }
     }
 
     fun updateConnectionState(connected: Boolean) {
         isConnected = connected
         sendBoolParameter(hrConnectedParam, isConnected)
-        if (vrcoscCompatibilityEnabled) {
-            sendBoolParameter(VrcoscHeartrateParameters.CONNECTED, isConnected)
-            sendBoolParameter(VrcoscHeartrateParameters.ENABLED, isConnected)
-        }
         Log.d(TAG, "Sent isHRConnected: $isConnected")
     }
 
-    private fun sendVrcoscHeartRate(bpm: Int) {
-        val now = System.currentTimeMillis()
-        heartRateSamples.addLast(now to bpm)
-        while (heartRateSamples.firstOrNull()?.first?.let {
-                it + VrcoscHeartrateParameters.AVERAGE_PERIOD_MS <= now
-            } == true
-        ) {
-            heartRateSamples.removeFirst()
-        }
+    private fun sendVrcoscHeartRate(values: VrcoscHeartRateValues) {
+        sendIntParameter(VrcoscHeartrateParameters.VALUE, values.bpm)
+        sendFloatParameter(VrcoscHeartrateParameters.NORMALISED, values.normalised)
+        sendIntParameter(VrcoscHeartrateParameters.AVERAGE, values.average)
+        sendFloatParameter(VrcoscHeartrateParameters.UNITS, values.units)
+        sendFloatParameter(VrcoscHeartrateParameters.TENS, values.tens)
+        sendFloatParameter(VrcoscHeartrateParameters.HUNDREDS, values.hundreds)
+    }
 
-        val average = heartRateSamples.map { it.second }.average().roundToInt()
-        val (units, tens, hundreds) = VrcoscHeartrateParameters.legacyDigits(bpm)
-
-        sendIntParameter(VrcoscHeartrateParameters.VALUE, bpm)
-        sendFloatParameter(VrcoscHeartrateParameters.NORMALISED, VrcoscHeartrateParameters.normalised(bpm))
-        sendIntParameter(VrcoscHeartrateParameters.AVERAGE, average)
-        sendFloatParameter(VrcoscHeartrateParameters.UNITS, units)
-        sendFloatParameter(VrcoscHeartrateParameters.TENS, tens)
-        sendFloatParameter(VrcoscHeartrateParameters.HUNDREDS, hundreds)
+    private fun sendVrcoscAvailability(receiving: Boolean) {
+        sendBoolParameter(VrcoscHeartrateParameters.CONNECTED, receiving)
+        sendBoolParameter(VrcoscHeartrateParameters.ENABLED, receiving)
     }
 
     private fun sendVrcoscHeartRateUnavailable() {
@@ -120,6 +131,39 @@ class VRChatOSCSender(
         sendFloatParameter(VrcoscHeartrateParameters.UNITS, 0f)
         sendFloatParameter(VrcoscHeartrateParameters.TENS, 0f)
         sendFloatParameter(VrcoscHeartrateParameters.HUNDREDS, 0f)
+    }
+
+    private fun scheduleReceivingTimeout() {
+        receivingTimeoutJob?.cancel()
+        receivingTimeoutJob = scope.launch {
+            delay(vrcoscTracker.millisecondsUntilStale(System.currentTimeMillis()))
+            if (!vrcoscTracker.isReceiving(System.currentTimeMillis())) {
+                vrcoscTracker.clear()
+                sendVrcoscAvailability(false)
+                sendBoolParameter(VrcoscHeartrateParameters.BEAT, false)
+                sendVrcoscHeartRateUnavailable()
+            }
+        }
+    }
+
+    suspend fun clearVrcoscCompatibility() {
+        if (!vrcoscCompatibilityEnabled) return
+
+        receivingTimeoutJob?.cancelAndJoin()
+        toggleObserverJob?.cancelAndJoin()
+        pulseObserverJob?.cancelAndJoin()
+        scopeJob.cancelAndJoin()
+        vrcoscTracker.clear()
+
+        sendMessage(buildOSCMessage(VrcoscHeartrateParameters.CONNECTED, false))
+        sendMessage(buildOSCMessage(VrcoscHeartrateParameters.ENABLED, false))
+        sendMessage(buildOSCMessage(VrcoscHeartrateParameters.BEAT, false))
+        sendMessage(buildOSCMessage(VrcoscHeartrateParameters.VALUE, 0))
+        sendMessage(buildOSCMessage(VrcoscHeartrateParameters.NORMALISED, 0f))
+        sendMessage(buildOSCMessage(VrcoscHeartrateParameters.AVERAGE, 0))
+        sendMessage(buildOSCMessage(VrcoscHeartrateParameters.UNITS, 0f))
+        sendMessage(buildOSCMessage(VrcoscHeartrateParameters.TENS, 0f))
+        sendMessage(buildOSCMessage(VrcoscHeartrateParameters.HUNDREDS, 0f))
     }
 
     private fun sendIntParameter(address: String, value: Int) {
@@ -206,7 +250,8 @@ class VRChatOSCSender(
         Log.d(TAG, "Cleaning up OSC sender")
         toggleObserverJob?.cancel()
         pulseObserverJob?.cancel()
-        scope.cancel()
+        receivingTimeoutJob?.cancel()
+        scopeJob.cancel()
         try {
             socket?.close()
         } catch (e: Exception) {

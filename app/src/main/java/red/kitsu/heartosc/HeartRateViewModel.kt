@@ -70,7 +70,13 @@ class HeartRateViewModel(application: Application) : AndroidViewModel(applicatio
                 )
             }.collect { config ->
                 // Recreate OSC sender when settings change
-                oscSender?.cleanup()
+                val previousSender = oscSender
+                if (previousSender?.vrcoscCompatibilityEnabled == true &&
+                    !config.vrcoscCompatibilityEnabled
+                ) {
+                    previousSender.clearVrcoscCompatibility()
+                }
+                previousSender?.cleanup()
                 val sender = VRChatOSCSender(
                     config.host,
                     config.port,
@@ -89,14 +95,16 @@ class HeartRateViewModel(application: Application) : AndroidViewModel(applicatio
                     state is HeartRateMonitorManager.ConnectionState.Discovering ||
                     state is HeartRateMonitorManager.ConnectionState.Reconnecting
                 sender.updateConnectionState(isConnected)
-                sender.updateHeartRate(heartRate.value)
+                sender.replayHeartRate(heartRateManager.latestHeartRateSample.value)
             }
         }
 
         // Monitor heart rate changes and manage pulse generator
         viewModelScope.launch {
             heartRate.collect { bpm ->
-                oscSender?.updateHeartRate(bpm)
+                if (bpm == null) {
+                    oscSender?.markHeartRateUnavailable()
+                }
                 heartRateService?.updateHeartRate(bpm)
 
                 // Start/stop pulse generator based on BPM
@@ -105,6 +113,13 @@ class HeartRateViewModel(application: Application) : AndroidViewModel(applicatio
                 } else {
                     pulseGenerator.stop()
                 }
+            }
+        }
+
+        // SharedFlow preserves every BLE notification, including repeated BPM values.
+        viewModelScope.launch {
+            heartRateManager.heartRateSamples.collect { sample ->
+                oscSender?.updateHeartRateSample(sample)
             }
         }
 
