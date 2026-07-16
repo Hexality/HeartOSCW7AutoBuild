@@ -21,3 +21,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "HeartOSC"
 include(":app")
+include(":wear")

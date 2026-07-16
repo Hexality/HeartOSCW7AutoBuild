@@ -4,9 +4,13 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Bluetooth
+import androidx.compose.material.icons.filled.Watch
 import androidx.compose.material3.*
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -19,6 +23,7 @@ fun SettingsScreen(
     viewModel: HeartRateViewModel,
     onBackPressed: () -> Unit
 ) {
+    val inputSource by viewModel.inputSource.collectAsState()
     val oscHost by viewModel.oscHost.collectAsState()
     val oscPort by viewModel.oscPort.collectAsState()
     val hrParam by viewModel.hrParam.collectAsState()
@@ -27,6 +32,7 @@ fun SettingsScreen(
     val heartbeatPulseParam by viewModel.heartbeatPulseParam.collectAsState()
     val heartbeatPulseDuration by viewModel.heartbeatPulseDuration.collectAsState()
 
+    var inputSourceState by remember(inputSource) { mutableStateOf(inputSource) }
     var hostText by remember(oscHost) { mutableStateOf(oscHost) }
     var portText by remember(oscPort) { mutableStateOf(oscPort.toString()) }
     var hrParamText by remember(hrParam) { mutableStateOf(hrParam) }
@@ -62,6 +68,77 @@ fun SettingsScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            Text(
+                text = stringResource(R.string.settings_section_input_source),
+                style = MaterialTheme.typography.titleLarge,
+                color = MaterialTheme.colorScheme.primary
+            )
+
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { inputSourceState = SettingsManager.VAL_INPUT_SOURCE_BLE }
+                        .padding(vertical = 8.dp, horizontal = 4.dp),
+                    verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Bluetooth,
+                        contentDescription = null,
+                        tint = if (inputSourceState == SettingsManager.VAL_INPUT_SOURCE_BLE) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(
+                            alpha = 0.6f
+                        ),
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Text(
+                        text = stringResource(R.string.input_source_ble),
+                        style = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier.weight(1f)
+                    )
+                    RadioButton(
+                        selected = inputSourceState == SettingsManager.VAL_INPUT_SOURCE_BLE,
+                        onClick = { inputSourceState = SettingsManager.VAL_INPUT_SOURCE_BLE }
+                    )
+                }
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { inputSourceState = SettingsManager.VAL_INPUT_SOURCE_WEAR_OS }
+                        .padding(vertical = 8.dp, horizontal = 4.dp),
+                    verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Watch,
+                        contentDescription = null,
+                        tint = if (inputSourceState == SettingsManager.VAL_INPUT_SOURCE_WEAR_OS) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(
+                            alpha = 0.6f
+                        ),
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Text(
+                        text = stringResource(R.string.input_source_wearos),
+                        style = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier.weight(1f)
+                    )
+                    RadioButton(
+                        selected = inputSourceState == SettingsManager.VAL_INPUT_SOURCE_WEAR_OS,
+                        onClick = { inputSourceState = SettingsManager.VAL_INPUT_SOURCE_WEAR_OS }
+                    )
+                }
+            }
+
+            HorizontalDivider(
+                modifier = Modifier.fillMaxWidth(),
+                thickness = 1.dp,
+                color = MaterialTheme.colorScheme.outlineVariant
+            )
+
             Text(
                 text = stringResource(R.string.settings_section_osc_config),
                 style = MaterialTheme.typography.titleLarge,
@@ -100,7 +177,7 @@ fun SettingsScreen(
                 modifier = Modifier.fillMaxWidth(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 isError = portText.isNotEmpty() && (portText.toIntOrNull() == null ||
-                         portText.toInt() !in 1..65535)
+                        portText.toInt() !in 1..65535)
             )
 
             Text(
@@ -201,7 +278,7 @@ fun SettingsScreen(
                 modifier = Modifier.fillMaxWidth(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 isError = heartbeatPulseDurationText.isNotEmpty() && (heartbeatPulseDurationText.toIntOrNull() == null ||
-                         heartbeatPulseDurationText.toInt() !in 1..5000)
+                        heartbeatPulseDurationText.toInt() !in 1..5000)
             )
 
             Text(
@@ -215,6 +292,7 @@ fun SettingsScreen(
 
             Button(
                 onClick = {
+                    viewModel.setInputSource(inputSourceState)
                     viewModel.setOscHost(hostText)
                     val port = portText.toIntOrNull()
                     if (port != null && port in 1..65535) {
@@ -231,14 +309,14 @@ fun SettingsScreen(
                     onBackPressed()
                 },
                 enabled = hostText.isNotBlank() &&
-                         portText.isNotEmpty() &&
-                         portText.toIntOrNull()?.let { it in 1..65535 } == true &&
-                         hrParamText.isNotBlank() &&
-                         hrConnectedParamText.isNotBlank() &&
-                         heartbeatToggleParamText.isNotBlank() &&
-                         heartbeatPulseParamText.isNotBlank() &&
-                         heartbeatPulseDurationText.isNotEmpty() &&
-                         heartbeatPulseDurationText.toIntOrNull()?.let { it in 1..5000 } == true,
+                        portText.isNotEmpty() &&
+                        portText.toIntOrNull()?.let { it in 1..65535 } == true &&
+                        hrParamText.isNotBlank() &&
+                        hrConnectedParamText.isNotBlank() &&
+                        heartbeatToggleParamText.isNotBlank() &&
+                        heartbeatPulseParamText.isNotBlank() &&
+                        heartbeatPulseDurationText.isNotEmpty() &&
+                        heartbeatPulseDurationText.toIntOrNull()?.let { it in 1..5000 } == true,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text(stringResource(R.string.common_save))
@@ -246,13 +324,15 @@ fun SettingsScreen(
 
             OutlinedButton(
                 onClick = {
+                    inputSourceState = SettingsManager.VAL_INPUT_SOURCE_BLE
                     hostText = SettingsManager.DEFAULT_OSC_HOST
                     portText = SettingsManager.DEFAULT_OSC_PORT.toString()
                     hrParamText = SettingsManager.DEFAULT_HR_PARAM
                     hrConnectedParamText = SettingsManager.DEFAULT_HR_CONNECTED_PARAM
                     heartbeatToggleParamText = SettingsManager.DEFAULT_HEARTBEAT_TOGGLE_PARAM
                     heartbeatPulseParamText = SettingsManager.DEFAULT_HEARTBEAT_PULSE_PARAM
-                    heartbeatPulseDurationText = SettingsManager.DEFAULT_HEARTBEAT_PULSE_DURATION.toString()
+                    heartbeatPulseDurationText =
+                        SettingsManager.DEFAULT_HEARTBEAT_PULSE_DURATION.toString()
                 },
                 modifier = Modifier.fillMaxWidth()
             ) {

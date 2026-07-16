@@ -9,6 +9,8 @@ HeartOSC is an Android app that streams heart rate data from Bluetooth Low Energ
 ## Features
 
 - **Bluetooth LE heart rate monitor support** - Connects to standard BLE heart rate monitors.
+- **Wear OS Watch Companion** - Connects and streams heart rate data directly from your Wear OS smartwatch (e.g., Pixel Watch, Galaxy Watch).
+- **OLED Power Saving Mode** - Dims and scales down the watch app display automatically after 10 seconds of inactivity to save battery and prevent OLED burn-in.
 - **VRChat OSC integration** - Sends real-time heart rate data to VRChat avatars.
 - **Automatic reconnection** - Reconnects with exponential backoff.
 - **Multi-language support** - Supports English, Japanese, Korean, and Simplified Chinese.
@@ -22,9 +24,10 @@ HeartOSC is an Android app that streams heart rate data from Bluetooth Low Energ
 
 ## Requirements
 
-- Android 8.0 (API 26) or higher
+- Android 8.0 (API 26) or higher (for the phone app)
+- Wear OS 3.0 (API 30) or higher (for the watch companion app)
 - Bluetooth Low Energy (BLE) support
-- A compatible heart rate monitor using the standard Bluetooth Heart Rate Service
+- A compatible heart rate monitor or Wear OS smartwatch
 - VRChat with OSC enabled
 
 ## Installation
@@ -68,10 +71,18 @@ https://play.google.com/store/apps/details?id=red.kitsu.heartosc
    - **OSC Port**: OSC port number, defaulting to `9000`
    - **Parameters**: OSC parameter paths for your avatar
 
-4. Connect your heart rate monitor:
-   - Tap **Connect to Device**
-   - Select your heart rate monitor from the list
-   - Wait for the connection to establish
+### Connecting via Bluetooth (BLE)
+
+1. Set your **Input Source** in settings to **Bluetooth (BLE)**.
+2. Tap **Connect to Device** on the main screen.
+3. Select your heart rate monitor from the list and wait for the connection to establish.
+
+### Connecting via Wear OS Watch
+
+1. Install the watch companion app on your Wear OS watch.
+2. Open the **HeartOSC** app on your phone, go to **Settings**, and set the **Input Source** to **Wear OS Watch**.
+3. Launch the **HeartOSC** app on your watch, make sure to grant the Sensor permission, and tap **Start**.
+4. Tap **Connect Wear OS** on the phone app's main screen to start receiving data from the watch.
 
 ### OSC Parameters
 
@@ -107,7 +118,9 @@ To use heart rate data in your VRChat avatar:
 
 For a ready-to-use heart rate display implementation, check out [nullstalgia's Heart Rate Display prefab](https://nullstalgia.booth.pm/items/5156075) on BOOTH. This prefab provides a visual heart rate monitor that works with HeartOSC.
 
-## Supported Heart Rate Monitors
+## Supported Devices
+
+### Bluetooth LE Heart Rate Monitors
 
 Any Bluetooth LE heart rate monitor that implements the standard [Bluetooth Heart Rate Service](https://www.bluetooth.com/specifications/specs/heart-rate-service-1-0/) should work, including:
 
@@ -117,6 +130,15 @@ Any Bluetooth LE heart rate monitor that implements the standard [Bluetooth Hear
 - Coospo H6/H9
 - Many others
 
+### Wear OS Smartwatches
+
+Any smartwatch running Wear OS 3.0 or higher with a built-in heart rate sensor, including:
+
+- Google Pixel Watch (all generations)
+- Samsung Galaxy Watch (4, 5, 6, 7, and Ultra)
+- Fossil Gen 6
+- Other Wear OS compatible watches
+
 ## Troubleshooting
 
 ### Heart rate monitor not found
@@ -125,6 +147,12 @@ Any Bluetooth LE heart rate monitor that implements the standard [Bluetooth Hear
 - Check that Bluetooth is enabled on your device.
 - Ensure location permissions are granted.
 - Try restarting Bluetooth on your device.
+
+### Wear OS Watch Connection Issues
+
+- Ensure the HeartOSC app is running and active on your watch.
+- Make sure Bluetooth and Wi-Fi/Cloud sync are enabled on both your phone and watch so Google Play Services can communicate.
+- If the phone does not receive heart rate data, try restarting the HeartOSC app on both devices.
 
 ### VRChat not receiving data
 
