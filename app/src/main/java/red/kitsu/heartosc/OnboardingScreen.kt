@@ -37,6 +37,9 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -53,6 +56,7 @@ fun OnboardingScreen(
     val pageCount = if (selectedInputSource == SettingsManager.VAL_INPUT_SOURCE_WEAR_OS) 5 else 6
     val pagerState = rememberPagerState(pageCount = { pageCount })
     val scope = rememberCoroutineScope()
+    val lifecycleOwner = LocalLifecycleOwner.current
 
     // Helper function to check if Bluetooth is enabled
     fun isBluetoothCurrentlyEnabled(): Boolean {
@@ -141,11 +145,27 @@ fun OnboardingScreen(
         notificationPermissionGranted = hasNotificationPermission()
     }
 
-    // Re-check Bluetooth enabled state when returning to the app
-    LaunchedEffect(pagerState.currentPage) {
-        if (pagerState.currentPage == 1) {
+    // Re-check Bluetooth when entering its page.
+    LaunchedEffect(pagerState.currentPage, selectedInputSource) {
+        if (selectedInputSource == SettingsManager.VAL_INPUT_SOURCE_BLE &&
+            pagerState.currentPage == 2
+        ) {
             bluetoothEnabledState = isBluetoothCurrentlyEnabled()
         }
+    }
+
+    // The page does not change when Bluetooth is enabled from system settings, so refresh on resume too.
+    DisposableEffect(lifecycleOwner, selectedInputSource) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME &&
+                selectedInputSource == SettingsManager.VAL_INPUT_SOURCE_BLE &&
+                pagerState.currentPage == 2
+            ) {
+                bluetoothEnabledState = isBluetoothCurrentlyEnabled()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     Scaffold { paddingValues ->

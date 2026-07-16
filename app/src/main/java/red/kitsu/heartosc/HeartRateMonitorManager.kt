@@ -9,7 +9,10 @@ import android.os.Build
 import android.util.Log
 import androidx.annotation.RequiresPermission
 import androidx.core.app.ActivityCompat
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.CoroutineScope
@@ -18,6 +21,11 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.util.*
+
+internal data class HeartRateSample(
+    val bpm: Int,
+    val receivedAtMillis: Long
+)
 
 class HeartRateMonitorManager(private val context: Context) {
 
@@ -77,6 +85,15 @@ class HeartRateMonitorManager(private val context: Context) {
     private val _heartRate = MutableStateFlow<Int?>(null)
     val heartRate: StateFlow<Int?> = _heartRate.asStateFlow()
 
+    private val _latestHeartRateSample = MutableStateFlow<HeartRateSample?>(null)
+    internal val latestHeartRateSample: StateFlow<HeartRateSample?> = _latestHeartRateSample.asStateFlow()
+
+    private val _heartRateSamples = MutableSharedFlow<HeartRateSample>(
+        extraBufferCapacity = 64,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST
+    )
+    internal val heartRateSamples: SharedFlow<HeartRateSample> = _heartRateSamples
+
     private val _energyExpended = MutableStateFlow<Int?>(null)
     val energyExpended: StateFlow<Int?> = _energyExpended.asStateFlow()
 
@@ -134,7 +151,7 @@ class HeartRateMonitorManager(private val context: Context) {
                 }
                 BluetoothProfile.STATE_DISCONNECTED -> {
                     Log.d(TAG, "Disconnected from GATT server (status: $status, manual: $isManualDisconnect)")
-                    _heartRate.value = null
+                    clearHeartRate()
 
                     // Only attempt reconnection if this wasn't a manual disconnect
                     if (!isManualDisconnect && lastConnectedDevice != null) {
@@ -183,7 +200,7 @@ class HeartRateMonitorManager(private val context: Context) {
             if (characteristic?.uuid == HEART_RATE_MEASUREMENT_CHAR_UUID) {
                 val data = parseHeartRateMeasurement(characteristic)
                 Log.d(TAG, "Heart rate: ${data.heartRate} bpm")
-                _heartRate.value = data.heartRate
+                publishHeartRate(data.heartRate)
                 _energyExpended.value = data.energyExpended
                 _rrIntervals.value = data.rrIntervals
             }
@@ -199,7 +216,7 @@ class HeartRateMonitorManager(private val context: Context) {
                 Log.d(TAG, "Heart rate: ${data.heartRate} bpm" +
                         (data.energyExpended?.let { ", Energy: $it kJ" } ?: "") +
                         (if (data.rrIntervals.isNotEmpty()) ", RR: ${data.rrIntervals.size} intervals" else ""))
-                _heartRate.value = data.heartRate
+                publishHeartRate(data.heartRate)
                 _energyExpended.value = data.energyExpended
                 _rrIntervals.value = data.rrIntervals
             }
@@ -368,7 +385,7 @@ fun disconnect() {
         lastConnectedDevice = null // Clear last device
         reconnectAttempts = 0 // Reset reconnect attempts
         _connectionState.value = ConnectionState.Disconnected
-        _heartRate.value = null
+        clearHeartRate()
         _energyExpended.value = null
         _rrIntervals.value = emptyList()
         Log.d(TAG, "Manually disconnected")
@@ -433,6 +450,18 @@ fun disconnect() {
             characteristic.value
         }
         return parseHeartRateMeasurement(value)
+    }
+
+    private fun publishHeartRate(bpm: Int) {
+        val sample = HeartRateSample(bpm, System.currentTimeMillis())
+        _heartRate.value = bpm
+        _latestHeartRateSample.value = sample
+        _heartRateSamples.tryEmit(sample)
+    }
+
+    private fun clearHeartRate() {
+        _heartRate.value = null
+        _latestHeartRateSample.value = null
     }
 
     private fun parseHeartRateMeasurement(value: ByteArray): HeartRateMeasurement {

@@ -12,6 +12,7 @@ import androidx.compose.material.icons.filled.Watch
 import androidx.compose.material3.*
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
@@ -31,6 +32,7 @@ fun SettingsScreen(
     val heartbeatToggleParam by viewModel.heartbeatToggleParam.collectAsState()
     val heartbeatPulseParam by viewModel.heartbeatPulseParam.collectAsState()
     val heartbeatPulseDuration by viewModel.heartbeatPulseDuration.collectAsState()
+    val vrcoscCompatibilityEnabled by viewModel.vrcoscCompatibilityEnabled.collectAsState()
 
     var inputSourceState by remember(inputSource) { mutableStateOf(inputSource) }
     var hostText by remember(oscHost) { mutableStateOf(oscHost) }
@@ -40,6 +42,9 @@ fun SettingsScreen(
     var heartbeatToggleParamText by remember(heartbeatToggleParam) { mutableStateOf(heartbeatToggleParam) }
     var heartbeatPulseParamText by remember(heartbeatPulseParam) { mutableStateOf(heartbeatPulseParam) }
     var heartbeatPulseDurationText by remember(heartbeatPulseDuration) { mutableStateOf(heartbeatPulseDuration.toString()) }
+    var vrcoscCompatibilityChecked by remember(vrcoscCompatibilityEnabled) {
+        mutableStateOf(vrcoscCompatibilityEnabled)
+    }
 
     Scaffold(
         topBar = {
@@ -288,6 +293,21 @@ fun SettingsScreen(
                 modifier = Modifier.padding(start = 16.dp)
             )
 
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Checkbox(
+                    checked = vrcoscCompatibilityChecked,
+                    onCheckedChange = { vrcoscCompatibilityChecked = it }
+                )
+                Text(
+                    text = stringResource(R.string.label_vrcosc_compatibility),
+                    style = MaterialTheme.typography.bodyLarge
+                )
+            }
+
             Spacer(modifier = Modifier.height(16.dp))
 
             Button(
@@ -306,6 +326,7 @@ fun SettingsScreen(
                     if (pulseDuration != null && pulseDuration in 1..5000) {
                         viewModel.setHeartbeatPulseDuration(pulseDuration)
                     }
+                    viewModel.setVrcoscCompatibilityEnabled(vrcoscCompatibilityChecked)
                     onBackPressed()
                 },
                 enabled = hostText.isNotBlank() &&
@@ -331,8 +352,8 @@ fun SettingsScreen(
                     hrConnectedParamText = SettingsManager.DEFAULT_HR_CONNECTED_PARAM
                     heartbeatToggleParamText = SettingsManager.DEFAULT_HEARTBEAT_TOGGLE_PARAM
                     heartbeatPulseParamText = SettingsManager.DEFAULT_HEARTBEAT_PULSE_PARAM
-                    heartbeatPulseDurationText =
-                        SettingsManager.DEFAULT_HEARTBEAT_PULSE_DURATION.toString()
+                    heartbeatPulseDurationText = SettingsManager.DEFAULT_HEARTBEAT_PULSE_DURATION.toString()
+                    vrcoscCompatibilityChecked = SettingsManager.DEFAULT_VRCOSC_COMPATIBILITY_ENABLED
                 },
                 modifier = Modifier.fillMaxWidth()
             ) {

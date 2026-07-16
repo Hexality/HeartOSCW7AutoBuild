@@ -10,6 +10,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.launch
 
 private data class OscConfig(
@@ -18,7 +21,8 @@ private data class OscConfig(
     val hrParam: String,
     val hrConnectedParam: String,
     val heartbeatToggleParam: String,
-    val heartbeatPulseParam: String
+    val heartbeatPulseParam: String,
+    val vrcoscCompatibilityEnabled: Boolean
 )
 
 class HeartRateViewModel(application: Application) : AndroidViewModel(application) {
@@ -49,6 +53,7 @@ class HeartRateViewModel(application: Application) : AndroidViewModel(applicatio
     val heartbeatToggleParam = settingsManager.heartbeatToggleParam
     val heartbeatPulseParam = settingsManager.heartbeatPulseParam
     val heartbeatPulseDuration = settingsManager.heartbeatPulseDuration
+    val vrcoscCompatibilityEnabled = settingsManager.vrcoscCompatibilityEnabled
 
     // Expose pulse state for UI
     val heartbeatPulse = pulseGenerator.pulseState
@@ -91,7 +96,11 @@ class HeartRateViewModel(application: Application) : AndroidViewModel(applicatio
             combine(
                 combine(oscHost, oscPort) { host, port -> Pair(host, port) },
                 combine(hrParam, hrConnectedParam) { hr, hrConn -> Pair(hr, hrConn) },
-                combine(heartbeatToggleParam, heartbeatPulseParam) { hbToggle, hbPulse -> Pair(hbToggle, hbPulse) }
+                combine(
+                    heartbeatToggleParam,
+                    heartbeatPulseParam,
+                    vrcoscCompatibilityEnabled
+                ) { hbToggle, hbPulse, vrcoscEnabled -> Triple(hbToggle, hbPulse, vrcoscEnabled) }
             ) { hostPort, hrParams, hbParams ->
                 OscConfig(
                     hostPort.first,
@@ -99,27 +108,53 @@ class HeartRateViewModel(application: Application) : AndroidViewModel(applicatio
                     hrParams.first,
                     hrParams.second,
                     hbParams.first,
-                    hbParams.second
+                    hbParams.second,
+                    hbParams.third
                 )
             }.collect { config ->
                 // Recreate OSC sender when settings change
-                oscSender?.cleanup()
-                oscSender = VRChatOSCSender(
+                val previousSender = oscSender
+                if (previousSender?.vrcoscCompatibilityEnabled == true &&
+                    !config.vrcoscCompatibilityEnabled
+                ) {
+                    previousSender.clearVrcoscCompatibility()
+                }
+                previousSender?.cleanup()
+                val sender = VRChatOSCSender(
                     config.host,
                     config.port,
                     pulseGenerator,
                     config.hrParam,
                     config.hrConnectedParam,
                     config.heartbeatToggleParam,
-                    config.heartbeatPulseParam
+                    config.heartbeatPulseParam,
+                    config.vrcoscCompatibilityEnabled
                 )
+                oscSender = sender
+
+                // Replay the latest state so setting changes take effect immediately.
+                val state = connectionState.value
+                val isConnected = state is HeartRateMonitorManager.ConnectionState.Connected ||
+                    state is HeartRateMonitorManager.ConnectionState.Discovering ||
+                    state is HeartRateMonitorManager.ConnectionState.Reconnecting
+                sender.updateConnectionState(isConnected)
+                val latestSample = if (
+                    inputSource.value == SettingsManager.VAL_INPUT_SOURCE_WEAR_OS
+                ) {
+                    wearOSManager.latestHeartRateSample.value
+                } else {
+                    heartRateManager.latestHeartRateSample.value
+                }
+                sender.replayHeartRate(latestSample)
             }
         }
 
         // Monitor heart rate changes and manage pulse generator
         viewModelScope.launch {
             heartRate.collect { bpm ->
-                oscSender?.updateHeartRate(bpm)
+                if (bpm == null) {
+                    oscSender?.markHeartRateUnavailable()
+                }
                 heartRateService?.updateHeartRate(bpm)
 
                 // Start/stop pulse generator based on BPM
@@ -129,6 +164,20 @@ class HeartRateViewModel(application: Application) : AndroidViewModel(applicatio
                     pulseGenerator.stop()
                 }
             }
+        }
+
+        // Preserve every notification from the selected source, including repeated BPM values.
+        viewModelScope.launch {
+            merge(
+                heartRateManager.heartRateSamples.map {
+                    SettingsManager.VAL_INPUT_SOURCE_BLE to it
+                },
+                wearOSManager.heartRateSamples.map {
+                    SettingsManager.VAL_INPUT_SOURCE_WEAR_OS to it
+                }
+            )
+                .filter { (source) -> source == inputSource.value }
+                .collect { (_, sample) -> oscSender?.updateHeartRateSample(sample) }
         }
 
         // Monitor connection state and send to OSC
@@ -230,6 +279,10 @@ class HeartRateViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun setHeartbeatPulseDuration(duration: Int) {
         settingsManager.setHeartbeatPulseDuration(duration)
+    }
+
+    fun setVrcoscCompatibilityEnabled(enabled: Boolean) {
+        settingsManager.setVrcoscCompatibilityEnabled(enabled)
     }
 
     @RequiresPermission(allOf = [Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT])

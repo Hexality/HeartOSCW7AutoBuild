@@ -120,6 +120,7 @@
     <string name="help_heartbeat_toggle_parameter">OSC path for heartbeat toggle state (bool)</string>
     <string name="help_heartbeat_pulse_parameter">OSC path for heartbeat pulse state (bool)</string>
     <string name="help_pulse_duration">Duration of each heartbeat pulse in milliseconds (1-5000)</string>
+    <string name="label_vrcosc_compatibility">Send VRCOSC-compatible parameters</string>
 
     <!-- Buttons -->
     <string name="button_reset_defaults">Reset to Defaults</string>

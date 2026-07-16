@@ -95,6 +95,24 @@ HeartOSC sends the following OSC parameters to VRChat:
 | Heartbeat Toggle | Bool | Toggles with each beat     | `/avatar/parameters/HeartBeatToggle` |
 | Heartbeat Pulse  | Bool | True during pulse duration | `/avatar/parameters/isHRBeat`        |
 
+For compatibility with VRCOSC Bluetooth Heartrate, HeartOSC also broadcasts the
+standard `VRCOSC/Heartrate` parameters alongside the customizable parameters above:
+
+| Parameter  | Type  | Default OSC path                                  |
+|------------|-------|---------------------------------------------------|
+| Connected  | Bool  | `/avatar/parameters/VRCOSC/Heartrate/Connected`  |
+| Value      | Int   | `/avatar/parameters/VRCOSC/Heartrate/Value`      |
+| Normalised | Float | `/avatar/parameters/VRCOSC/Heartrate/Normalised` |
+| Average    | Int   | `/avatar/parameters/VRCOSC/Heartrate/Average`    |
+| Beat       | Bool  | `/avatar/parameters/VRCOSC/Heartrate/Beat`       |
+| Enabled    | Bool  | `/avatar/parameters/VRCOSC/Heartrate/Enabled`    |
+| Units      | Float | `/avatar/parameters/VRCOSC/Heartrate/Units`      |
+| Tens       | Float | `/avatar/parameters/VRCOSC/Heartrate/Tens`       |
+| Hundreds   | Float | `/avatar/parameters/VRCOSC/Heartrate/Hundreds`   |
+
+These compatibility parameters can be enabled or disabled in Settings. They are
+enabled by default.
+
 ### Settings
 
 Use settings to customize:
