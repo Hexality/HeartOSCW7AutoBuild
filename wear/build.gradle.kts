@@ -12,7 +12,8 @@ android {
         applicationId = "red.kitsu.heartosc" // Must match the phone app ID to connect via Wearable API
         minSdk = 26
         targetSdk = 36
-        versionCode = 2
+        // Keep Wear releases in a separate range from the phone APK.
+        versionCode = 1_000_002
         versionName = "1.1"
     }
 

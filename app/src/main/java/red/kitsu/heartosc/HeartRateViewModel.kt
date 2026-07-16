@@ -10,6 +10,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.launch
 
 private data class OscConfig(
@@ -135,7 +138,14 @@ class HeartRateViewModel(application: Application) : AndroidViewModel(applicatio
                     state is HeartRateMonitorManager.ConnectionState.Discovering ||
                     state is HeartRateMonitorManager.ConnectionState.Reconnecting
                 sender.updateConnectionState(isConnected)
-                sender.replayHeartRate(heartRateManager.latestHeartRateSample.value)
+                val latestSample = if (
+                    inputSource.value == SettingsManager.VAL_INPUT_SOURCE_WEAR_OS
+                ) {
+                    wearOSManager.latestHeartRateSample.value
+                } else {
+                    heartRateManager.latestHeartRateSample.value
+                }
+                sender.replayHeartRate(latestSample)
             }
         }
 
@@ -156,11 +166,18 @@ class HeartRateViewModel(application: Application) : AndroidViewModel(applicatio
             }
         }
 
-        // SharedFlow preserves every BLE notification, including repeated BPM values.
+        // Preserve every notification from the selected source, including repeated BPM values.
         viewModelScope.launch {
-            heartRateManager.heartRateSamples.collect { sample ->
-                oscSender?.updateHeartRateSample(sample)
-            }
+            merge(
+                heartRateManager.heartRateSamples.map {
+                    SettingsManager.VAL_INPUT_SOURCE_BLE to it
+                },
+                wearOSManager.heartRateSamples.map {
+                    SettingsManager.VAL_INPUT_SOURCE_WEAR_OS to it
+                }
+            )
+                .filter { (source) -> source == inputSource.value }
+                .collect { (_, sample) -> oscSender?.updateHeartRateSample(sample) }
         }
 
         // Monitor connection state and send to OSC

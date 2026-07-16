@@ -6,7 +6,10 @@ import com.google.android.gms.wearable.MessageClient
 import com.google.android.gms.wearable.MessageEvent
 import com.google.android.gms.wearable.Wearable
 import kotlinx.coroutines.*
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import java.nio.ByteBuffer
@@ -24,6 +27,17 @@ class WearOSManager(private val context: Context) : MessageClient.OnMessageRecei
     private val _heartRate = MutableStateFlow<Int?>(null)
     val heartRate: StateFlow<Int?> = _heartRate.asStateFlow()
 
+    private val _latestHeartRateSample = MutableStateFlow<HeartRateSample?>(null)
+    internal val latestHeartRateSample: StateFlow<HeartRateSample?> =
+        _latestHeartRateSample.asStateFlow()
+
+    private val _heartRateSamples = MutableSharedFlow<HeartRateSample>(
+        extraBufferCapacity = 64,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST
+    )
+    internal val heartRateSamples: SharedFlow<HeartRateSample> = _heartRateSamples
+
+    @Volatile
     private var isListening = false
     private var lastReceivedTime = 0L
     private var timeoutJob: Job? = null
@@ -43,19 +57,20 @@ class WearOSManager(private val context: Context) : MessageClient.OnMessageRecei
         isListening = false
         Wearable.getMessageClient(context).removeListener(this)
         _connectionState.value = HeartRateMonitorManager.ConnectionState.Disconnected
-        _heartRate.value = null
+        clearHeartRate()
         timeoutJob?.cancel()
         Log.d(TAG, "Stopped listening to Wear OS messages")
     }
 
     override fun onMessageReceived(messageEvent: MessageEvent) {
+        if (!isListening) return
+
         if (messageEvent.path == WEAR_PATH_HR) {
             val buffer = ByteBuffer.wrap(messageEvent.data)
             if (buffer.remaining() >= 4) {
                 val bpm = buffer.int
-                _heartRate.value = bpm
+                publishHeartRate(bpm)
                 _connectionState.value = HeartRateMonitorManager.ConnectionState.Connected
-                lastReceivedTime = System.currentTimeMillis()
                 Log.d(TAG, "Received Wear OS Heart Rate: $bpm bpm")
             }
         }
@@ -69,11 +84,24 @@ class WearOSManager(private val context: Context) : MessageClient.OnMessageRecei
                 if (_connectionState.value is HeartRateMonitorManager.ConnectionState.Connected &&
                     System.currentTimeMillis() - lastReceivedTime > TIMEOUT_MS) {
                     _connectionState.value = HeartRateMonitorManager.ConnectionState.Connecting
-                    _heartRate.value = null
+                    clearHeartRate()
                     Log.d(TAG, "Watch connection timed out, waiting for messages...")
                 }
             }
         }
+    }
+
+    private fun publishHeartRate(bpm: Int) {
+        val sample = HeartRateSample(bpm, System.currentTimeMillis())
+        lastReceivedTime = sample.receivedAtMillis
+        _heartRate.value = bpm
+        _latestHeartRateSample.value = sample
+        _heartRateSamples.tryEmit(sample)
+    }
+
+    private fun clearHeartRate() {
+        _heartRate.value = null
+        _latestHeartRateSample.value = null
     }
 
     fun cleanup() {
