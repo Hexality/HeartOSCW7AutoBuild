@@ -87,6 +87,13 @@
     <!-- Settings Screen -->
     <!-- ============================================ -->
     <string name="settings_title">設定</string>
+    <string name="settings_section_input_source">入力ソース</string>
+    <string name="label_input_source">心拍数ソース</string>
+    <string name="input_source_ble">Bluetooth LE心拍計</string>
+    <string name="input_source_wearos">Wear OSウォッチ</string>
+    <string name="main_button_connect_wearos">Wear OSウォッチを待機</string>
+    <string name="main_button_disconnect_wearos">待機を停止</string>
+    <string name="status_waiting_wearos">ウォッチのデータを待機中...</string>
     <string name="settings_section_osc_config">OSC設定</string>
     <string name="settings_section_osc_params">OSCパラメータ</string>
 
@@ -107,6 +114,7 @@
     <string name="help_heartbeat_toggle_parameter">心拍トグル状態のOSCパス（真偽値）</string>
     <string name="help_heartbeat_pulse_parameter">心拍パルス状態のOSCパス（真偽値）</string>
     <string name="help_pulse_duration">各心拍パルスの持続時間（ミリ秒単位、1-5000）</string>
+    <string name="label_vrcosc_compatibility">VRCOSC互換パラメータを送信</string>
 
     <!-- Buttons -->
     <string name="button_reset_defaults">デフォルトに戻す</string>
@@ -124,7 +132,7 @@
     <!-- About Screen -->
     <!-- ============================================ -->
     <string name="about_title">について</string>
-    <string name="about_version">バージョン 1.0</string>
+    <string name="about_version">バージョン %1$s</string>
     <string name="about_description">HeartOSCはBluetoothスマート拍計をOSCプロトコル経由でVRChatに接続します。</string>
 
     <!-- Features Section -->

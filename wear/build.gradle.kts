@@ -13,8 +13,8 @@ android {
         minSdk = 26
         targetSdk = 36
         // Keep Wear releases in a separate range from the phone APK.
-        versionCode = 1_000_002
-        versionName = "1.1"
+        versionCode = 1_000_003
+        versionName = "1.2.0"
     }
 
     buildTypes {
@@ -42,6 +42,7 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)
+    implementation(libs.androidx.fragment)
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.graphics)

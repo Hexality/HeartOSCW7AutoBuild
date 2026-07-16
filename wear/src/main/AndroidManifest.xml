@@ -11,12 +11,17 @@
         android:label="HeartOSC Wear"
         android:supportsRtl="true"
         android:theme="@android:style/Theme.DeviceDefault">
+
+        <meta-data
+            android:name="com.google.android.wearable.standalone"
+            android:value="false" />
         
         <uses-library android:name="com.google.android.wearable" android:required="false" />
 
         <activity
             android:name=".WearMainActivity"
             android:exported="true"
+            android:taskAffinity=""
             android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

@@ -87,6 +87,13 @@
     <!-- Settings Screen -->
     <!-- ============================================ -->
     <string name="settings_title">设置</string>
+    <string name="settings_section_input_source">输入源</string>
+    <string name="label_input_source">心率来源</string>
+    <string name="input_source_ble">蓝牙 LE 心率监测器</string>
+    <string name="input_source_wearos">Wear OS 手表</string>
+    <string name="main_button_connect_wearos">监听 Wear OS 手表</string>
+    <string name="main_button_disconnect_wearos">停止监听</string>
+    <string name="status_waiting_wearos">正在等待手表数据...</string>
     <string name="settings_section_osc_config">OSC 配置</string>
     <string name="settings_section_osc_params">OSC 参数</string>
 
@@ -107,6 +114,7 @@
     <string name="help_heartbeat_toggle_parameter">心跳切换状态的 OSC 路径（布尔值）</string>
     <string name="help_heartbeat_pulse_parameter">心跳脉冲状态的 OSC 路径（布尔值）</string>
     <string name="help_pulse_duration">每个心跳脉冲的持续时间（毫秒，1-5000）</string>
+    <string name="label_vrcosc_compatibility">发送 VRCOSC 兼容参数</string>
 
     <!-- Buttons -->
     <string name="button_reset_defaults">恢复默认值</string>
@@ -124,7 +132,7 @@
     <!-- About Screen -->
     <!-- ============================================ -->
     <string name="about_title">关于</string>
-    <string name="about_version">版本 1.0</string>
+    <string name="about_version">版本 %1$s</string>
     <string name="about_description">HeartOSC 通过 OSC 协议将蓝牙心率监测器连接到 VRChat。</string>
 
     <!-- Features Section -->
