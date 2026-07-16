@@ -93,6 +93,13 @@
     <!-- Settings Screen -->
     <!-- ============================================ -->
     <string name="settings_title">Settings</string>
+    <string name="settings_section_input_source">Input Source</string>
+    <string name="label_input_source">Heart Rate Source</string>
+    <string name="input_source_ble">Bluetooth LE Monitor</string>
+    <string name="input_source_wearos">Wear OS Watch</string>
+    <string name="main_button_connect_wearos">Listen to Wear OS Watch</string>
+    <string name="main_button_disconnect_wearos">Stop Listening</string>
+    <string name="status_waiting_wearos">Waiting for watch data...</string>
     <string name="settings_section_osc_config">OSC Configuration</string>
     <string name="settings_section_osc_params">OSC Parameters</string>
 

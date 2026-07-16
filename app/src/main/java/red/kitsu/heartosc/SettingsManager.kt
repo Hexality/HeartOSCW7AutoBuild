@@ -19,6 +19,10 @@ class SettingsManager(context: Context) {
         private const val KEY_HEARTBEAT_PULSE_DURATION = "heartbeat_pulse_duration"
         private const val KEY_VRCOSC_COMPATIBILITY_ENABLED = "vrcosc_compatibility_enabled"
         private const val KEY_ONBOARDING_COMPLETED = "onboarding_completed"
+        private const val KEY_INPUT_SOURCE = "input_source"
+
+        const val VAL_INPUT_SOURCE_BLE = "BLE"
+        const val VAL_INPUT_SOURCE_WEAR_OS = "WEAR_OS"
 
         const val DEFAULT_OSC_HOST = "192.168.1.10"
         const val DEFAULT_OSC_PORT = 9000
@@ -31,6 +35,9 @@ class SettingsManager(context: Context) {
     }
 
     private val prefs: SharedPreferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+
+    private val _inputSource = MutableStateFlow(prefs.getString(KEY_INPUT_SOURCE, VAL_INPUT_SOURCE_BLE) ?: VAL_INPUT_SOURCE_BLE)
+    val inputSource: StateFlow<String> = _inputSource.asStateFlow()
 
     private val _oscHost = MutableStateFlow(prefs.getString(KEY_OSC_HOST, DEFAULT_OSC_HOST) ?: DEFAULT_OSC_HOST)
     val oscHost: StateFlow<String> = _oscHost.asStateFlow()
@@ -57,6 +64,11 @@ class SettingsManager(context: Context) {
         prefs.getBoolean(KEY_VRCOSC_COMPATIBILITY_ENABLED, DEFAULT_VRCOSC_COMPATIBILITY_ENABLED)
     )
     val vrcoscCompatibilityEnabled: StateFlow<Boolean> = _vrcoscCompatibilityEnabled.asStateFlow()
+
+    fun setInputSource(source: String) {
+        _inputSource.value = source
+        prefs.edit().putString(KEY_INPUT_SOURCE, source).apply()
+    }
 
     fun setOscHost(host: String) {
         _oscHost.value = host

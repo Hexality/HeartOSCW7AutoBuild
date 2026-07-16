@@ -5,19 +5,15 @@ plugins {
 }
 
 android {
-    namespace = "red.kitsu.heartosc"
-    compileSdk {
-        version = release(36)
-    }
+    namespace = "red.kitsu.heartosc.wear"
+    compileSdk = 36
 
     defaultConfig {
-        applicationId = "red.kitsu.heartosc"
+        applicationId = "red.kitsu.heartosc" // Must match the phone app ID to connect via Wearable API
         minSdk = 26
         targetSdk = 36
         versionCode = 2
         versionName = "1.1"
-
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
@@ -43,7 +39,6 @@ android {
 
 dependencies {
     implementation(libs.androidx.core.ktx)
-    implementation(libs.play.services.wearable)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)
     implementation(platform(libs.androidx.compose.bom))
@@ -51,14 +46,5 @@ dependencies {
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
-    implementation("androidx.compose.material:material-icons-extended:1.7.8")
-    implementation(libs.androidx.lifecycle.viewmodel.compose)
-    implementation(libs.androidx.navigation.compose)
-    testImplementation(libs.junit)
-    androidTestImplementation(libs.androidx.junit)
-    androidTestImplementation(libs.androidx.espresso.core)
-    androidTestImplementation(platform(libs.androidx.compose.bom))
-    androidTestImplementation(libs.androidx.compose.ui.test.junit4)
-    debugImplementation(libs.androidx.compose.ui.tooling)
-    debugImplementation(libs.androidx.compose.ui.test.manifest)
+    implementation(libs.play.services.wearable)
 }
