@@ -13,13 +13,14 @@ android {
         minSdk = 26
         targetSdk = 36
         // Keep Wear releases in a separate range from the phone APK.
-        versionCode = 1_000_003
+        versionCode = 1_000_004
         versionName = "1.2.0"
     }
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
