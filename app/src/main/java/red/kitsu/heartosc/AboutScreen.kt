@@ -73,7 +73,7 @@ fun AboutScreen(
             )
 
             Text(
-                text = stringResource(R.string.about_version),
+                text = stringResource(R.string.about_version, BuildConfig.VERSION_NAME),
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
             )
