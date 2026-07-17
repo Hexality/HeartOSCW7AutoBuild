@@ -86,7 +86,11 @@ https://play.google.com/store/apps/details?id=red.kitsu.heartosc
 
 ### OSC Parameters
 
-HeartOSC sends the following OSC parameters to VRChat:
+#### Iron Heart compatibility
+
+HeartOSC's four configurable OSC parameters use the same default paths as
+[Iron Heart](https://github.com/nullstalgia/iron-heart), making them compatible
+with avatars and prefabs built for its output:
 
 | Parameter        | Type | Description                | Default Path                         |
 |------------------|------|----------------------------|--------------------------------------|
@@ -95,8 +99,13 @@ HeartOSC sends the following OSC parameters to VRChat:
 | Heartbeat Toggle | Bool | Toggles with each beat     | `/avatar/parameters/HeartBeatToggle` |
 | Heartbeat Pulse  | Bool | True during pulse duration | `/avatar/parameters/isHRBeat`        |
 
-For compatibility with VRCOSC Bluetooth Heartrate, HeartOSC also broadcasts the
-standard `VRCOSC/Heartrate` parameters alongside the customizable parameters above:
+These paths can be changed in Settings.
+
+#### VRCOSC Bluetooth Heartrate compatibility
+
+HeartOSC can also broadcast output compatible with
+[VRCOSC Bluetooth Heartrate](https://github.com/WentTheFox/VRCOSC-BluetoothHeartrate)
+alongside the four configurable parameters above:
 
 | Parameter  | Type  | Default OSC path                                  |
 |------------|-------|---------------------------------------------------|
@@ -135,6 +144,35 @@ To use heart rate data in your VRChat avatar:
 ### Example Avatar Prefab
 
 For a ready-to-use heart rate display implementation, check out [nullstalgia's Heart Rate Display prefab](https://nullstalgia.booth.pm/items/5156075) on BOOTH. This prefab provides a visual heart rate monitor that works with HeartOSC.
+
+### Heart Rate Assets from kitsVR
+
+Looking for more heart rate-related assets for your avatar? Visit [kitsVR on BOOTH](https://kitsvr.booth.pm/).
+
+<p align="center">
+  <a href="https://kitsvr.booth.pm/">
+    <img width="1500" height="500" alt="kitsVR BOOTH shop" src="https://github.com/user-attachments/assets/62881b6f-286c-4a24-a5dc-c61774ea3015" />
+  </a>
+</p>
+
+<table>
+  <tr>
+    <td align="center" width="50%">
+      <a href="https://kitsvr.booth.pm/items/8596101">
+        <img src="https://github.com/user-attachments/assets/c1ebeb0d-2422-4ae7-9591-3d067b05df5f" alt="ゆらゆらしっぽ - Tail Sway" width="100%" />
+      </a>
+    </td>
+    <td align="center" width="50%">
+      <a href="https://kitsvr.booth.pm/items/8616247">
+        <img src="https://github.com/user-attachments/assets/05fe7b4b-305a-48fc-8018-307ba53d87cc" alt="どきどきほっぺ - Heart Blush" width="100%" />
+      </a>
+    </td>
+  </tr>
+  <tr>
+    <td align="center"><a href="https://kitsvr.booth.pm/items/8596101"><strong>ゆらゆらしっぽ - Tail Sway</strong></a></td>
+    <td align="center"><a href="https://kitsvr.booth.pm/items/8616247"><strong>どきどきほっぺ - Heart Blush</strong></a></td>
+  </tr>
+</table>
 
 ## Supported Devices
 
