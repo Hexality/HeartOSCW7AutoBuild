@@ -2,8 +2,11 @@ package red.kitsu.heartosc
 
 import android.content.Context
 import android.util.Log
+import com.google.android.gms.tasks.Tasks
+import com.google.android.gms.wearable.CapabilityClient
 import com.google.android.gms.wearable.MessageClient
 import com.google.android.gms.wearable.MessageEvent
+import com.google.android.gms.wearable.Node
 import com.google.android.gms.wearable.Wearable
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.BufferOverflow
@@ -18,6 +21,7 @@ class WearOSManager(private val context: Context) : MessageClient.OnMessageRecei
     companion object {
         private const val TAG = "WearOSManager"
         private const val WEAR_PATH_HR = "/heartrate"
+        private const val WEAR_CAPABILITY = "heartosc_wear_app"
         private const val TIMEOUT_MS = 6000L
     }
 
@@ -102,6 +106,23 @@ class WearOSManager(private val context: Context) : MessageClient.OnMessageRecei
     private fun clearHeartRate() {
         _heartRate.value = null
         _latestHeartRateSample.value = null
+    }
+
+    suspend fun findTargetNode(): Node? = withContext(Dispatchers.IO) {
+        try {
+            val capabilityClient = Wearable.getCapabilityClient(context)
+            val capabilityInfo = Tasks.await(capabilityClient.getCapability(WEAR_CAPABILITY, CapabilityClient.FILTER_ALL))
+            var node = capabilityInfo.nodes.firstOrNull { it.isNearby } ?: capabilityInfo.nodes.firstOrNull()
+            if (node == null) {
+                val nodeClient = Wearable.getNodeClient(context)
+                val connected = Tasks.await(nodeClient.connectedNodes)
+                node = connected.firstOrNull { it.isNearby } ?: connected.firstOrNull()
+            }
+            node
+        } catch (e: Exception) {
+            Log.e(TAG, "Error finding target Wear OS node", e)
+            null
+        }
     }
 
     fun cleanup() {
