@@ -69,14 +69,18 @@ class WearOSManager(private val context: Context) : MessageClient.OnMessageRecei
     override fun onMessageReceived(messageEvent: MessageEvent) {
         if (!isListening) return
 
-        if (messageEvent.path == WEAR_PATH_HR) {
-            val buffer = ByteBuffer.wrap(messageEvent.data)
-            if (buffer.remaining() >= 4) {
-                val bpm = buffer.int
-                publishHeartRate(bpm)
-                _connectionState.value = HeartRateMonitorManager.ConnectionState.Connected
-                Log.d(TAG, "Received Wear OS Heart Rate: $bpm bpm")
+        try {
+            if (messageEvent.path == WEAR_PATH_HR) {
+                val buffer = ByteBuffer.wrap(messageEvent.data)
+                if (buffer.remaining() >= 4) {
+                    val bpm = buffer.int
+                    publishHeartRate(bpm)
+                    _connectionState.value = HeartRateMonitorManager.ConnectionState.Connected
+                    Log.d(TAG, "Received Wear OS Heart Rate: $bpm bpm")
+                }
             }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error processing received Wear OS message", e)
         }
     }
 

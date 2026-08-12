@@ -72,14 +72,26 @@ class WearHeartRateService : Service() {
         if (_isRunning.value) return
 
         val notification = createNotification(0)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_HEALTH)
-        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MANIFEST)
-        } else {
-            startForeground(NOTIFICATION_ID, notification)
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_HEALTH)
+            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MANIFEST)
+            } else {
+                startForeground(NOTIFICATION_ID, notification)
+            }
+            _isRunning.value = true
+        } catch (e: SecurityException) {
+            Log.e(TAG, "SecurityException starting foreground health service", e)
+            _isRunning.value = false
+            stopSelf()
+            return
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to start foreground tracking service", e)
+            _isRunning.value = false
+            stopSelf()
+            return
         }
-        _isRunning.value = true
 
         acquireWakeLock()
 
@@ -99,35 +111,49 @@ class WearHeartRateService : Service() {
 
         _isRunning.value = false
         _currentBpm.value = 0
-        stopForeground(STOP_FOREGROUND_REMOVE)
+        try {
+            stopForeground(STOP_FOREGROUND_REMOVE)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error stopping foreground service", e)
+        }
         stopSelf()
         Log.d(TAG, "Stopped foreground tracking on Wear OS")
     }
 
     private fun acquireWakeLock() {
-        val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
-        wakeLock = powerManager.newWakeLock(
-            PowerManager.PARTIAL_WAKE_LOCK,
-            "HeartOSC::WearTrackingWakeLock"
-        ).apply {
-            acquire(10 * 60 * 60 * 1000L) // 10 hours max timeout
+        try {
+            val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
+            wakeLock = powerManager.newWakeLock(
+                PowerManager.PARTIAL_WAKE_LOCK,
+                "HeartOSC::WearTrackingWakeLock"
+            ).apply {
+                acquire(10 * 60 * 60 * 1000L) // 10 hours max timeout
+            }
+            Log.d(TAG, "Acquired partial wake lock for Wear OS background streaming")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to acquire wake lock", e)
         }
-        Log.d(TAG, "Acquired partial wake lock for Wear OS background streaming")
     }
 
     private fun releaseWakeLock() {
-        wakeLock?.let {
-            if (it.isHeld) {
-                it.release()
+        try {
+            wakeLock?.let {
+                if (it.isHeld) {
+                    it.release()
+                }
             }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error releasing wake lock", e)
         }
         wakeLock = null
         Log.d(TAG, "Released wake lock")
     }
 
     private fun sendHeartRateToPhone(bpm: Int) {
+        if (!_isRunning.value) return
         val payload = ByteBuffer.allocate(4).putInt(bpm).array()
         Wearable.getNodeClient(this).connectedNodes.addOnSuccessListener { nodes ->
+            if (!_isRunning.value) return@addOnSuccessListener
             val messageClient = Wearable.getMessageClient(this)
             for (node in nodes) {
                 messageClient.sendMessage(node.id, WEAR_PATH_HR, payload)
