@@ -48,7 +48,7 @@ jobs:
         overwrite: true # optional, default is false
         # If true, hidden files will be included in the artifact. If false, hidden files will be excluded from the artifact.
 
-        include-hidden-files: # optional, default is false
+        include-hidden-files: false # optional, default is false
         # If true, the artifact will be archived (zipped) before uploading. If false, the artifact will be uploaded as-is without archiving. When `archive` is `false`, only a single file can be uploaded. The name of the file will be used as the artifact name (ignoring the `name` parameter).
 
         archive: true # optional, default is true
