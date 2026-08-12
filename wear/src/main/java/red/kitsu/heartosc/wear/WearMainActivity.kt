@@ -195,7 +195,12 @@ class WearMainActivity : ComponentActivity() {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.BODY_SENSORS_BACKGROUND) == PackageManager.PERMISSION_GRANTED) {
                 startHeartRateService()
             } else {
-                requestBackgroundPermissionLauncher.launch(Manifest.permission.BODY_SENSORS_BACKGROUND)
+                try {
+                    requestBackgroundPermissionLauncher.launch(Manifest.permission.BODY_SENSORS_BACKGROUND)
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to launch BODY_SENSORS_BACKGROUND launcher, starting service with foreground sensor permission", e)
+                    startHeartRateService()
+                }
             }
         } else {
             startHeartRateService()
@@ -203,10 +208,14 @@ class WearMainActivity : ComponentActivity() {
     }
 
     private fun startHeartRateService() {
-        val intent = Intent(this, WearHeartRateService::class.java).apply {
-            action = WearHeartRateService.ACTION_START
+        try {
+            val intent = Intent(this, WearHeartRateService::class.java).apply {
+                action = WearHeartRateService.ACTION_START
+            }
+            ContextCompat.startForegroundService(this, intent)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to start WearHeartRateService", e)
         }
-        ContextCompat.startForegroundService(this, intent)
     }
 
     private fun stopHeartRateService() {

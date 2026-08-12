@@ -83,12 +83,16 @@ class WearHeartRateManager(private val context: Context) : SensorEventListener {
 
     private fun startSensorManagerFallback() {
         isUsingHealthServices = false
-        heartRateSensor = sensorManager.getDefaultSensor(Sensor.TYPE_HEART_RATE)
-        heartRateSensor?.let { sensor ->
-            sensorManager.registerListener(this, sensor, SensorManager.SENSOR_DELAY_FASTEST)
-            Log.d(TAG, "Started tracking with legacy SensorManager")
-        } ?: run {
-            Log.e(TAG, "No heart rate sensor available on device")
+        try {
+            heartRateSensor = sensorManager.getDefaultSensor(Sensor.TYPE_HEART_RATE)
+            heartRateSensor?.let { sensor ->
+                sensorManager.registerListener(this, sensor, SensorManager.SENSOR_DELAY_FASTEST)
+                Log.d(TAG, "Started tracking with legacy SensorManager")
+            } ?: run {
+                Log.e(TAG, "No heart rate sensor available on device")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error starting legacy SensorManager listener", e)
         }
     }
 
