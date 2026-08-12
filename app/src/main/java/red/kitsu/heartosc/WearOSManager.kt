@@ -22,7 +22,7 @@ class WearOSManager(private val context: Context) : MessageClient.OnMessageRecei
         private const val TAG = "WearOSManager"
         private const val WEAR_PATH_HR = "/heartrate"
         private const val WEAR_CAPABILITY = "heartosc_wear_app"
-        private const val TIMEOUT_MS = 6000L
+        private const val TIMEOUT_MS = 30000L
     }
 
     private val _connectionState = MutableStateFlow<HeartRateMonitorManager.ConnectionState>(HeartRateMonitorManager.ConnectionState.Disconnected)
