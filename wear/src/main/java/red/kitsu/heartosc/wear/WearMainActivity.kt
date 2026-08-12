@@ -219,10 +219,14 @@ class WearMainActivity : ComponentActivity() {
     }
 
     private fun stopHeartRateService() {
-        val intent = Intent(this, WearHeartRateService::class.java).apply {
-            action = WearHeartRateService.ACTION_STOP
+        try {
+            val intent = Intent(this, WearHeartRateService::class.java).apply {
+                action = WearHeartRateService.ACTION_STOP
+            }
+            startService(intent)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to stop WearHeartRateService", e)
         }
-        startService(intent)
     }
 }
 
