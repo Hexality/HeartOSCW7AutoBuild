@@ -24,15 +24,15 @@ jobs:
       run: chmod +x gradlew
     - name: Build with Gradle
       # run: ./gradlew
-      run: ./gradlew assemble
+      run: ./gradlew assembleDebug
 
     - name: "Upload a Build Artifact: Main app"
       uses: actions/upload-artifact@v7.0.1
       with:
         # Artifact name. If the `archive` input is `false`, the name of the file uploaded will be the artifact name.
-        name: HeartOSC-app-release.apk # optional, default is artifact
+        name: HeartOSC-app-debug.apk # optional, default is artifact
         # A file, directory or wildcard pattern that describes what to upload.
-        path: app/build/outputs/apk/release/app-release.apk
+        path: app/build/outputs/apk/debug/app-debug.apk
         # The desired behavior if no files are found using the provided path.
         #Available Options:
         #warn: Output a warning but do not fail the action
@@ -52,8 +52,8 @@ jobs:
     - name: "Upload a Build Artifact: Wear app"
       uses: actions/upload-artifact@v7.0.1
       with:
-        name: HeartOSC-wear-release.apk
-        path: wear/build/outputs/apk/release/wear-release.apk
+        name: HeartOSC-wear-debug.apk
+        path: wear/build/outputs/apk/debug/wear-debug.apk
         #Available Options:
         #warn: Output a warning but do not fail the action
         #error: Fail the action with an error message
