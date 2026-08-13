@@ -7,6 +7,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -26,6 +27,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import red.kitsu.heartosc.wear.sensor.WearHeartRateManager
 import red.kitsu.heartosc.wear.service.WearHeartRateService
 import kotlinx.coroutines.delay
 import kotlin.time.Duration.Companion.milliseconds
@@ -33,6 +35,7 @@ import kotlin.time.Duration.Companion.milliseconds
 class WearMainActivity : ComponentActivity() {
     companion object {
         private const val TAG = "WearMainActivity"
+        const val PERMISSION_HEALTH_READ_HEART_RATE = "android.permission.health.READ_HEART_RATE"
     }
 
     private val requestBackgroundPermissionLauncher = registerForActivityResult(
@@ -43,20 +46,33 @@ class WearMainActivity : ComponentActivity() {
         startHeartRateService()
     }
 
-    private val requestForegroundPermissionLauncher = registerForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { isGranted ->
-        if (isGranted) {
+    private val requestForegroundPermissionsLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        val bodySensorsGranted = permissions[Manifest.permission.BODY_SENSORS] ?: (
+            ContextCompat.checkSelfPermission(this, Manifest.permission.BODY_SENSORS) == PackageManager.PERMISSION_GRANTED
+        )
+        val healthGranted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            permissions[PERMISSION_HEALTH_READ_HEART_RATE] ?: (
+                ContextCompat.checkSelfPermission(this, PERMISSION_HEALTH_READ_HEART_RATE) == PackageManager.PERMISSION_GRANTED
+            )
+        } else {
+            false
+        }
+
+        Log.d(TAG, "Foreground permissions result: bodySensors=$bodySensorsGranted, health=$healthGranted")
+        if (bodySensorsGranted || healthGranted) {
             checkAndRequestBackgroundPermission()
         } else {
-            Log.w(TAG, "BODY_SENSORS permission denied by user")
+            Log.w(TAG, "Required sensor permissions denied by user")
+            Toast.makeText(this, "Body sensor permissions are required for heart rate tracking", Toast.LENGTH_LONG).show()
         }
     }
 
     private val requestNotificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { _ ->
-        checkAndRequestForegroundPermission()
+        checkAndRequestForegroundPermissions()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -178,29 +194,46 @@ class WearMainActivity : ComponentActivity() {
             ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
             requestNotificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         } else {
-            checkAndRequestForegroundPermission()
+            checkAndRequestForegroundPermissions()
         }
     }
 
-    private fun checkAndRequestForegroundPermission() {
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.BODY_SENSORS) == PackageManager.PERMISSION_GRANTED) {
+    private fun checkAndRequestForegroundPermissions() {
+        val hasBodySensors = ContextCompat.checkSelfPermission(this, Manifest.permission.BODY_SENSORS) == PackageManager.PERMISSION_GRANTED
+        val hasHealthRead = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            ContextCompat.checkSelfPermission(this, PERMISSION_HEALTH_READ_HEART_RATE) == PackageManager.PERMISSION_GRANTED
+        } else {
+            false
+        }
+
+        if (hasBodySensors || hasHealthRead) {
             checkAndRequestBackgroundPermission()
         } else {
-            requestForegroundPermissionLauncher.launch(Manifest.permission.BODY_SENSORS)
+            val missingPermissions = mutableListOf<String>()
+            missingPermissions.add(Manifest.permission.BODY_SENSORS)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                missingPermissions.add(PERMISSION_HEALTH_READ_HEART_RATE)
+            }
+            requestForegroundPermissionsLauncher.launch(missingPermissions.toTypedArray())
         }
     }
 
     private fun checkAndRequestBackgroundPermission() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.BODY_SENSORS_BACKGROUND) == PackageManager.PERMISSION_GRANTED) {
-                startHeartRateService()
-            } else {
-                try {
-                    requestBackgroundPermissionLauncher.launch(Manifest.permission.BODY_SENSORS_BACKGROUND)
-                } catch (e: Exception) {
-                    Log.w(TAG, "Failed to launch BODY_SENSORS_BACKGROUND launcher, starting service with foreground sensor permission", e)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            val hasBodySensors = ContextCompat.checkSelfPermission(this, Manifest.permission.BODY_SENSORS) == PackageManager.PERMISSION_GRANTED
+            if (hasBodySensors) {
+                if (ContextCompat.checkSelfPermission(this, Manifest.permission.BODY_SENSORS_BACKGROUND) == PackageManager.PERMISSION_GRANTED) {
                     startHeartRateService()
+                } else {
+                    try {
+                        requestBackgroundPermissionLauncher.launch(Manifest.permission.BODY_SENSORS_BACKGROUND)
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Failed to launch BODY_SENSORS_BACKGROUND launcher, starting service with foreground sensor permission", e)
+                        startHeartRateService()
+                    }
                 }
+            } else {
+                startHeartRateService()
             }
         } else {
             startHeartRateService()
@@ -213,8 +246,12 @@ class WearMainActivity : ComponentActivity() {
                 action = WearHeartRateService.ACTION_START
             }
             ContextCompat.startForegroundService(this, intent)
+        } catch (e: SecurityException) {
+            Log.e(TAG, "SecurityException starting WearHeartRateService", e)
+            Toast.makeText(this, "Permission missing to start health service", Toast.LENGTH_SHORT).show()
         } catch (e: Exception) {
             Log.e(TAG, "Failed to start WearHeartRateService", e)
+            Toast.makeText(this, "Failed to start heart rate service", Toast.LENGTH_SHORT).show()
         }
     }
 

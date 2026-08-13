@@ -53,4 +53,5 @@ dependencies {
     implementation(libs.androidx.health.services.client)
     implementation(libs.androidx.concurrent.futures.ktx)
     implementation("com.google.guava:guava:31.1-android")
+    testImplementation(libs.junit)
 }
