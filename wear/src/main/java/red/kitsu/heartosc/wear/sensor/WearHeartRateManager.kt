@@ -1,12 +1,16 @@
 package red.kitsu.heartosc.wear.sensor
 
+import android.Manifest
 import android.content.Context
+import android.content.pm.PackageManager
 import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
+import android.os.Build
 import android.util.Log
 import androidx.concurrent.futures.await
+import androidx.core.content.ContextCompat
 import androidx.health.services.client.HealthServices
 import androidx.health.services.client.MeasureCallback
 import androidx.health.services.client.data.Availability
@@ -19,6 +23,29 @@ class WearHeartRateManager(private val context: Context) : SensorEventListener {
 
     companion object {
         private const val TAG = "WearHeartRateManager"
+        const val PERMISSION_HEALTH_READ_HEART_RATE = "android.permission.health.READ_HEART_RATE"
+
+        fun hasBodySensorsPermission(context: Context): Boolean {
+            return ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.BODY_SENSORS
+            ) == PackageManager.PERMISSION_GRANTED
+        }
+
+        fun hasHealthReadHeartRatePermission(context: Context): Boolean {
+            return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                ContextCompat.checkSelfPermission(
+                    context,
+                    PERMISSION_HEALTH_READ_HEART_RATE
+                ) == PackageManager.PERMISSION_GRANTED
+            } else {
+                false
+            }
+        }
+
+        fun hasHealthServicesPermissions(context: Context): Boolean {
+            return hasBodySensorsPermission(context) || hasHealthReadHeartRatePermission(context)
+        }
     }
 
     private var onBpmListener: ((Int) -> Unit)? = null
@@ -68,23 +95,32 @@ class WearHeartRateManager(private val context: Context) : SensorEventListener {
         startJob = scope.launch {
             unregisterJob?.join()
             unregisterJob = null
-            try {
-                val capabilities = measureClient.getCapabilitiesAsync().await()
-                if (!isTracking) return@launch
-                if (DataType.HEART_RATE_BPM in capabilities.supportedDataTypesMeasure) {
-                    Log.d(TAG, "Registering MeasureClient for HEART_RATE_BPM")
-                    measureClient.registerMeasureCallback(
-                        DataType.HEART_RATE_BPM,
-                        measureCallback
-                    )
-                    isUsingHealthServices = true
+
+            if (hasHealthServicesPermissions(context)) {
+                try {
+                    val capabilities = measureClient.getCapabilitiesAsync().await()
+                    if (!isTracking) return@launch
+                    if (DataType.HEART_RATE_BPM in capabilities.supportedDataTypesMeasure) {
+                        Log.d(TAG, "Registering MeasureClient for HEART_RATE_BPM")
+                        measureClient.registerMeasureCallback(
+                            DataType.HEART_RATE_BPM,
+                            measureCallback
+                        )
+                        isUsingHealthServices = true
+                        return@launch
+                    } else {
+                        Log.w(TAG, "HEART_RATE_BPM not supported in measureClient capabilities")
+                    }
+                } catch (e: CancellationException) {
+                    Log.d(TAG, "HealthServices registration cancelled")
                     return@launch
+                } catch (e: SecurityException) {
+                    Log.w(TAG, "SecurityException registering HealthServices, falling back to SensorManager", e)
+                } catch (e: Throwable) {
+                    Log.w(TAG, "HealthServices register failed, falling back to SensorManager", e)
                 }
-            } catch (e: CancellationException) {
-                Log.d(TAG, "HealthServices registration cancelled")
-                return@launch
-            } catch (e: Throwable) {
-                Log.w(TAG, "HealthServices register failed, falling back to SensorManager", e)
+            } else {
+                Log.w(TAG, "Missing Health Services permissions (BODY_SENSORS / READ_HEART_RATE), bypassing HealthServices and trying SensorManager fallback")
             }
 
             if (!isTracking) return@launch
@@ -95,6 +131,10 @@ class WearHeartRateManager(private val context: Context) : SensorEventListener {
 
     private fun startSensorManagerFallback() {
         isUsingHealthServices = false
+        if (!hasBodySensorsPermission(context)) {
+            Log.e(TAG, "Cannot start SensorManager fallback: BODY_SENSORS permission not granted")
+            return
+        }
         try {
             heartRateSensor = sensorManager.getDefaultSensor(Sensor.TYPE_HEART_RATE)
             heartRateSensor?.let { sensor ->
@@ -129,6 +169,8 @@ class WearHeartRateManager(private val context: Context) : SensorEventListener {
                     Log.d(TAG, "Unregistered MeasureClient callback")
                 } catch (e: CancellationException) {
                     throw e
+                } catch (e: SecurityException) {
+                    Log.e(TAG, "SecurityException unregistering MeasureClient callback", e)
                 } catch (e: Throwable) {
                     Log.e(TAG, "Error unregistering MeasureClient callback", e)
                 }
@@ -138,6 +180,8 @@ class WearHeartRateManager(private val context: Context) : SensorEventListener {
         try {
             sensorManager.unregisterListener(this)
             Log.d(TAG, "Unregistered legacy SensorManager listener")
+        } catch (e: SecurityException) {
+            Log.e(TAG, "SecurityException unregistering legacy SensorManager listener", e)
         } catch (e: Exception) {
             Log.e(TAG, "Error unregistering legacy SensorManager listener", e)
         }
