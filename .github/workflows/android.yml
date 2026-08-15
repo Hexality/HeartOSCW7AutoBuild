@@ -2,9 +2,9 @@ name: Android CI
 
 on:
   push:
-    branches: [ "fix/galaxy-watch-permissions-streaming-issue-6" ]
+    branches: [ "main" ]
   pull_request:
-    branches: [ "fix/galaxy-watch-permissions-streaming-issue-6" ]
+    branches: [ "main" ]
 
 jobs:
   build:
