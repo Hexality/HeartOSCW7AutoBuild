@@ -2,14 +2,12 @@ package red.kitsu.heartosc.wear
 
 import android.Manifest
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
-import android.hardware.Sensor
-import android.hardware.SensorEvent
-import android.hardware.SensorEventListener
-import android.hardware.SensorManager
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -29,46 +27,70 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
-import com.google.android.gms.wearable.Wearable
+import red.kitsu.heartosc.wear.sensor.WearHeartRateManager
+import red.kitsu.heartosc.wear.service.WearHeartRateService
 import kotlinx.coroutines.delay
-import java.nio.ByteBuffer
 import kotlin.time.Duration.Companion.milliseconds
 
-class WearMainActivity : ComponentActivity(), SensorEventListener {
+class WearMainActivity : ComponentActivity() {
     companion object {
         private const val TAG = "WearMainActivity"
-        private const val WEAR_PATH_HR = "/heartrate"
+        const val PERMISSION_HEALTH_READ_HEART_RATE = "android.permission.health.READ_HEART_RATE"
+        const val PERMISSION_HEALTH_READ_HEALTH_DATA_IN_BACKGROUND = "android.permission.health.READ_HEALTH_DATA_IN_BACKGROUND"
     }
 
-    private var sensorManager: SensorManager? = null
-    private var heartRateSensor: Sensor? = null
-    private var isMonitoring by mutableStateOf(false)
-    private var currentBpm by mutableStateOf(0)
-    private var wakeLock: android.os.PowerManager.WakeLock? = null
+    private val requestBackgroundPermissionsLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { results ->
+        Log.d(TAG, "Background permissions results: $results")
+        // Start service even if background permission isn't fully granted, but log outcome
+        startHeartRateService()
+    }
 
-    private val requestPermissionLauncher = registerForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { isGranted ->
-        if (isGranted) {
-            startHeartRateMonitoring()
+    private val requestForegroundPermissionsLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        val bodySensorsGranted = permissions[Manifest.permission.BODY_SENSORS] ?: (
+            ContextCompat.checkSelfPermission(this, Manifest.permission.BODY_SENSORS) == PackageManager.PERMISSION_GRANTED
+        )
+        val hasForegroundPermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.BAKLAVA) {
+            val healthGranted = permissions[PERMISSION_HEALTH_READ_HEART_RATE] ?: (
+                ContextCompat.checkSelfPermission(this, PERMISSION_HEALTH_READ_HEART_RATE) == PackageManager.PERMISSION_GRANTED
+            )
+            bodySensorsGranted || healthGranted
+        } else {
+            bodySensorsGranted
         }
+
+        Log.d(TAG, "Foreground permissions result: hasForegroundPermission=$hasForegroundPermission (bodySensors=$bodySensorsGranted)")
+        if (hasForegroundPermission) {
+            checkAndRequestBackgroundPermission()
+        } else {
+            Log.w(TAG, "Required sensor permissions denied by user")
+            Toast.makeText(this, "Body sensor permissions are required for heart rate tracking", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private val requestNotificationPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { _ ->
+        checkAndRequestForegroundPermissions()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Keep the watch screen awake while the app is active to prevent sensor sleep
+        // Keep screen awake while active in UI
         window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-
-        sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
-        heartRateSensor = sensorManager?.getDefaultSensor(Sensor.TYPE_HEART_RATE)
 
         setContent {
             WearHeartOSCTheme {
+                val isMonitoring by WearHeartRateService.isRunning.collectAsState()
+                val currentBpm by WearHeartRateService.currentBpm.collectAsState()
+
                 var isDimmed by remember { mutableStateOf(false) }
                 var interactionCount by remember { mutableIntStateOf(0) }
 
-                // Reset timer when interaction count changes, and dim after 10 seconds of inactivity
                 LaunchedEffect(interactionCount, isDimmed) {
                     if (!isDimmed) {
                         delay(10000L.milliseconds)
@@ -76,7 +98,6 @@ class WearMainActivity : ComponentActivity(), SensorEventListener {
                     }
                 }
 
-                // Smoothly animate scale and alpha of elements when dimmed
                 val scale by animateFloatAsState(
                     targetValue = if (isDimmed) 0.5f else 1.0f,
                     animationSpec = tween(durationMillis = 500),
@@ -91,7 +112,6 @@ class WearMainActivity : ComponentActivity(), SensorEventListener {
                 Surface(
                     modifier = Modifier
                         .fillMaxSize()
-                        // Intercept all pointer events to reset the inactivity timer
                         .pointerInput(Unit) {
                             awaitPointerEventScope {
                                 while (true) {
@@ -134,9 +154,9 @@ class WearMainActivity : ComponentActivity(), SensorEventListener {
                             Button(
                                 onClick = {
                                     if (isMonitoring) {
-                                        stopHeartRateMonitoring()
+                                        stopHeartRateService()
                                     } else {
-                                        checkAndRequestPermissions()
+                                        checkAndStartMonitoringFlow()
                                     }
                                 },
                                 colors = ButtonDefaults.buttonColors(
@@ -151,7 +171,6 @@ class WearMainActivity : ComponentActivity(), SensorEventListener {
                             }
                         }
 
-                        // Full-screen transparent overlay to intercept touches and wake up the screen when dimmed
                         if (isDimmed) {
                             Box(
                                 modifier = Modifier
@@ -172,85 +191,101 @@ class WearMainActivity : ComponentActivity(), SensorEventListener {
         }
     }
 
-    private fun checkAndRequestPermissions() {
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.BODY_SENSORS) == PackageManager.PERMISSION_GRANTED) {
-            startHeartRateMonitoring()
+    private fun checkAndStartMonitoringFlow() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            requestNotificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         } else {
-            requestPermissionLauncher.launch(Manifest.permission.BODY_SENSORS)
+            checkAndRequestForegroundPermissions()
         }
     }
 
-    private fun startHeartRateMonitoring() {
-        if (isMonitoring) return
-        
-        // Acquire wake lock to keep CPU running when screen goes off
-        val powerManager = getSystemService(POWER_SERVICE) as android.os.PowerManager
-        wakeLock = powerManager.newWakeLock(android.os.PowerManager.PARTIAL_WAKE_LOCK, "HeartOSC::TrackingWakeLock").apply {
-            acquire(10 * 60 * 60 * 1000L) // 10 hours max timeout
+    private fun checkAndRequestForegroundPermissions() {
+        val hasBodySensors = ContextCompat.checkSelfPermission(this, Manifest.permission.BODY_SENSORS) == PackageManager.PERMISSION_GRANTED
+        val hasForegroundPermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.BAKLAVA) {
+            val hasHealthRead = ContextCompat.checkSelfPermission(this, PERMISSION_HEALTH_READ_HEART_RATE) == PackageManager.PERMISSION_GRANTED
+            hasBodySensors || hasHealthRead
+        } else {
+            hasBodySensors
         }
 
-        heartRateSensor?.let { sensor ->
-            // Use standard or fast delay for real-time tracking
-            sensorManager?.registerListener(this, sensor, SensorManager.SENSOR_DELAY_NORMAL)
-            isMonitoring = true
-            Log.d(TAG, "Started heart rate sensor monitoring with wake lock")
-        } ?: run {
-            wakeLock?.release()
-            wakeLock = null
-            Log.e(TAG, "Heart rate sensor not available on this device")
-        }
-    }
-
-    private fun stopHeartRateMonitoring() {
-        if (!isMonitoring) return
-        sensorManager?.unregisterListener(this)
-        isMonitoring = false
-        currentBpm = 0
-        wakeLock?.let {
-            if (it.isHeld) {
-                it.release()
+        if (hasForegroundPermission) {
+            checkAndRequestBackgroundPermission()
+        } else {
+            val missingPermissions = mutableListOf<String>()
+            missingPermissions.add(Manifest.permission.BODY_SENSORS)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.BAKLAVA) {
+                missingPermissions.add(PERMISSION_HEALTH_READ_HEART_RATE)
             }
+            requestForegroundPermissionsLauncher.launch(missingPermissions.toTypedArray())
         }
-        wakeLock = null
-        Log.d(TAG, "Stopped heart rate sensor monitoring and released wake lock")
     }
 
-    override fun onSensorChanged(event: SensorEvent?) {
-        if (event?.sensor?.type == Sensor.TYPE_HEART_RATE) {
-            val bpm = event.values[0].toInt()
-            if (bpm > 0) {
-                currentBpm = bpm
-                sendHeartRateToPhone(bpm)
+    private fun checkAndRequestBackgroundPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.BAKLAVA) {
+            val missingBackgroundPermissions = mutableListOf<String>()
+            if (ContextCompat.checkSelfPermission(this, PERMISSION_HEALTH_READ_HEALTH_DATA_IN_BACKGROUND) != PackageManager.PERMISSION_GRANTED) {
+                missingBackgroundPermissions.add(PERMISSION_HEALTH_READ_HEALTH_DATA_IN_BACKGROUND)
             }
-        }
-    }
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.BODY_SENSORS_BACKGROUND) != PackageManager.PERMISSION_GRANTED) {
+                missingBackgroundPermissions.add(Manifest.permission.BODY_SENSORS_BACKGROUND)
+            }
 
-    override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
-
-    private fun sendHeartRateToPhone(bpm: Int) {
-        val payload = ByteBuffer.allocate(4).putInt(bpm).array()
-        Wearable.getNodeClient(this).connectedNodes.addOnSuccessListener { nodes ->
-            val messageClient = Wearable.getMessageClient(this)
-            for (node in nodes) {
-                messageClient.sendMessage(node.id, WEAR_PATH_HR, payload)
-                    .addOnSuccessListener {
-                        Log.d(TAG, "Sent BPM $bpm to companion device: ${node.displayName}")
+            if (missingBackgroundPermissions.isEmpty()) {
+                startHeartRateService()
+            } else {
+                try {
+                    requestBackgroundPermissionsLauncher.launch(missingBackgroundPermissions.toTypedArray())
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to launch background permissions launcher, starting service with foreground sensor permission", e)
+                    startHeartRateService()
+                }
+            }
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            val hasBodySensors = ContextCompat.checkSelfPermission(this, Manifest.permission.BODY_SENSORS) == PackageManager.PERMISSION_GRANTED
+            if (hasBodySensors) {
+                if (ContextCompat.checkSelfPermission(this, Manifest.permission.BODY_SENSORS_BACKGROUND) == PackageManager.PERMISSION_GRANTED) {
+                    startHeartRateService()
+                } else {
+                    try {
+                        requestBackgroundPermissionsLauncher.launch(arrayOf(Manifest.permission.BODY_SENSORS_BACKGROUND))
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Failed to launch BODY_SENSORS_BACKGROUND launcher, starting service with foreground sensor permission", e)
+                        startHeartRateService()
                     }
-                    .addOnFailureListener { e ->
-                        Log.e(TAG, "Failed to send BPM to device ${node.displayName}", e)
-                    }
+                }
+            } else {
+                startHeartRateService()
             }
+        } else {
+            startHeartRateService()
         }
     }
 
-    override fun onStop() {
-        super.onStop()
-        stopHeartRateMonitoring()
+    private fun startHeartRateService() {
+        try {
+            val intent = Intent(this, WearHeartRateService::class.java).apply {
+                action = WearHeartRateService.ACTION_START
+            }
+            ContextCompat.startForegroundService(this, intent)
+        } catch (e: SecurityException) {
+            Log.e(TAG, "SecurityException starting WearHeartRateService", e)
+            Toast.makeText(this, "Permission missing to start health service", Toast.LENGTH_SHORT).show()
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to start WearHeartRateService", e)
+            Toast.makeText(this, "Failed to start heart rate service", Toast.LENGTH_SHORT).show()
+        }
     }
 
-    override fun onDestroy() {
-        super.onDestroy()
-        stopHeartRateMonitoring()
+    private fun stopHeartRateService() {
+        try {
+            val intent = Intent(this, WearHeartRateService::class.java).apply {
+                action = WearHeartRateService.ACTION_STOP
+            }
+            startService(intent)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to stop WearHeartRateService", e)
+        }
     }
 }
 

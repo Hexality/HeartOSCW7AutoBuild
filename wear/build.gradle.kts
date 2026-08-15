@@ -50,4 +50,8 @@ dependencies {
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
     implementation(libs.play.services.wearable)
+    implementation(libs.androidx.health.services.client)
+    implementation(libs.androidx.concurrent.futures.ktx)
+    implementation("com.google.guava:guava:31.1-android")
+    testImplementation(libs.junit)
 }
